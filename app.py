@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import yfinance as yf
-import pandas_ta as ta
+import ta
 from datetime import datetime
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
@@ -50,20 +50,22 @@ class YahooFinanceProvider:
 # ==========================================
 def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty or len(df) < 50: return df
-    # Tendência
-    df['EMA_9'] = ta.ema(df['Close'], length=9)
-    df['EMA_20'] = ta.ema(df['Close'], length=20)
-    df['EMA_50'] = ta.ema(df['Close'], length=50)
-    df['EMA_200'] = ta.ema(df['Close'], length=200)
-    adx_df = ta.adx(df['High'], df['Low'], df['Close'], length=14)
-    if adx_df is not None: df = pd.concat([df, adx_df], axis=1)
+    
+    # Tendência (usando a biblioteca 'ta')
+    df['EMA_9'] = ta.trend.ema_indicator(df['Close'], window=9)
+    df['EMA_20'] = ta.trend.ema_indicator(df['Close'], window=20)
+    df['EMA_50'] = ta.trend.ema_indicator(df['Close'], window=50)
+    df['EMA_200'] = ta.trend.ema_indicator(df['Close'], window=200)
+    df['ADX'] = ta.trend.adx(df['High'], df['Low'], df['Close'], window=14)
+    
     # Momentum
-    df['RSI_14'] = ta.rsi(df['Close'], length=14)
-    macd_df = ta.macd(df['Close'], fast=12, slow=26, signal=9)
-    if macd_df is not None: df = pd.concat([df, macd_df], axis=1)
+    df['RSI_14'] = ta.momentum.rsi(df['Close'], window=14)
+    macd = ta.trend.MACD(df['Close'])
+    df['MACDh'] = macd.macd_diff()
+    
     # Volume
-    df['OBV'] = ta.obv(df['Close'], df['Volume'])
-    df['Volume_SMA'] = ta.sma(df['Volume'], length=20)
+    df['OBV'] = ta.volume.on_balance_volume(df['Close'], df['Volume'])
+    df['Volume_SMA'] = df['Volume'].rolling(window=20).mean()
     df['RVOL'] = df['Volume'] / df['Volume_SMA']
     
     df.dropna(inplace=True)
@@ -71,24 +73,27 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def generate_scores(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty: return df
+    
     # Trend Score
     bullish_align = (df['EMA_9'] > df['EMA_20']) & (df['EMA_20'] > df['EMA_50'])
     bearish_align = (df['EMA_9'] < df['EMA_20']) & (df['EMA_20'] < df['EMA_50'])
-    adx_col = [c for c in df.columns if c.startswith('ADX')][0]
-    adx_norm = np.clip(df[adx_col] / 50 * 100, 0, 100)
+    adx_norm = np.clip(df['ADX'] / 50 * 100, 0, 100)
+    
     df['Trend_Score'] = 50
     df.loc[bullish_align, 'Trend_Score'] = 50 + (adx_norm / 2)
     df.loc[bearish_align, 'Trend_Score'] = 50 - (adx_norm / 2)
+    
     # Momentum Score
-    macd_hist_col = [c for c in df.columns if c.startswith('MACDh')][0]
     rsi_component = df['RSI_14']
-    macd_component = np.where(df[macd_hist_col] > 0, 10, -10) 
+    macd_component = np.where(df['MACDh'] > 0, 10, -10) 
     df['Momentum_Score'] = np.clip(rsi_component + macd_component, 0, 100)
+    
     # Volume Score
     obv_roc = df['OBV'].pct_change(3).fillna(0)
     obv_signal = np.where(obv_roc > 0, 1, -1)
     rvol_capped = np.clip(df['RVOL'], 0, 3)
     df['Volume_Score'] = np.clip(50 + (rvol_capped * obv_signal * 15), 0, 100)
+    
     # Composite Score
     df['Composite_Score'] = (
         df['Trend_Score'] * SCORE_WEIGHTS['trend'] +
