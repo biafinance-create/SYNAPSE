@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import yfinance as yf
 import ta
 from datetime import datetime
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
+from streamlit_lightweight_charts import renderLightweightCharts
 
 # ==========================================
 # 1. CONFIGURAÇÕES CENTRAIS
@@ -19,9 +18,9 @@ SCORE_WEIGHTS = {
 }
 
 TARGET_THRESHOLDS = {
-    "1H": 0.003, # 0.3%
-    "1D": 0.015, # 1.5%
-    "1W": 0.040  # 4.0%
+    "1H": 0.003,
+    "1D": 0.015,
+    "1W": 0.040
 }
 
 # ==========================================
@@ -170,7 +169,8 @@ def load_and_process_data(ticker: str):
     return results
 
 def render_gauge(val: float, title: str):
-    fig = go.Figure(go.Indicator(
+    import plotly.graph_objects as go_plotly
+    fig = go_plotly.Figure(go_plotly.Indicator(
         mode="gauge+number", value=val, title={'text': title, 'font': {'size': 14}},
         gauge={
             'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "white"},
@@ -191,19 +191,8 @@ st.sidebar.title("⚙️ CONFIGURAÇÕES")
 ticker = st.sidebar.text_input("Ativo (Ticker)", value="PETR4").upper()
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("🛠️ FERRAMENTAS GRÁFICAS")
-show_fib = st.sidebar.checkbox("Mostrar Fibonacci", value=True)
-fib_mode = st.sidebar.radio("Modo Fibonacci", ["Automático (Recente)", "Manual (Preços Customizados)"])
-
-# Inputs manuais caso o usuário escolha o modo manual
-manual_top = 0.0
-manual_bottom = 0.0
-if show_fib and fib_mode == "Manual (Preços Customizados)":
-    manual_top = st.sidebar.number_input("Preço do Topo (100% ou 0%)", value=35.00)
-    manual_bottom = st.sidebar.number_input("Preço do Fundo (0% ou 100%)", value=30.00)
-
+st.sidebar.subheader("🛠️ CONFIGURAÇÕES DE TELA")
 show_ema200 = st.sidebar.checkbox("Mostrar EMA 200", value=True)
-show_rsi = st.sidebar.checkbox("Mostrar Painel RSI (Inferior)", value=True)
 
 # --- ENGINE ---
 data_dict = load_and_process_data(ticker)
@@ -255,56 +244,106 @@ with col2:
     </div>
     """, unsafe_allow_html=True)
 
-# --- ROW 3: TRADINGVIEW STYLE CHART + FIBONACCI ---
-st.markdown("#### 📈 GRÁFICO AVANÇADO & FIBONACCI (1D)")
+# --- ROW 3: TRADINGVIEW NATIVE ENGINE ---
+st.markdown("#### 📈 TRADINGVIEW ENGINE CHART (1D)")
 
-row_heights = [0.6, 0.2, 0.2] if show_rsi else [0.75, 0.25]
-fig_chart = make_subplots(rows=len(row_heights), cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=row_heights)
+# Formatando dados para o Lightweight Charts (TradingView nativo)
+df_chart = df_1d.reset_index()
+# Garantindo o formato de data YYYY-MM-DD
+df_chart['time'] = df_chart['Date'].dt.strftime('%Y-%m-%d')
 
-# 1. Candlestick principal
-fig_chart.add_trace(go.Candlestick(x=df_1d.index, open=df_1d['Open'], high=df_1d['High'], low=df_1d['Low'], close=df_1d['Close'], name="Preço"), row=1, col=1)
-fig_chart.add_trace(go.Scatter(x=df_1d.index, y=df_1d['EMA_20'], line=dict(color='orange', width=1), name='EMA 20'), row=1, col=1)
+candles = []
+volumes = []
+ema20_line = []
+ema200_line = []
 
-if show_ema200:
-    fig_chart.add_trace(go.Scatter(x=df_1d.index, y=df_1d['EMA_200'], line=dict(color='purple', width=2), name='EMA 200'), row=1, col=1)
+for _, row in df_chart.iterrows():
+    time_str = row['time']
+    # Candlestick
+    candles.append({
+        "time": time_str,
+        "open": float(row['Open']),
+        "high": float(row['High']),
+        "low": float(row['Low']),
+        "close": float(row['Close'])
+    })
+    # Volume com cores dinâmicas do TradingView (Verde/Vermelho)
+    vol_color = '#ef5350' if row['Close'] < row['Open'] else '#26a69a'
+    volumes.append({
+        "time": time_str,
+        "value": float(row['Volume']),
+        "color": vol_color
+    })
+    # EMA 20
+    if not pd.isna(row['EMA_20']):
+        ema20_line.append({"time": time_str, "value": float(row['EMA_20'])})
+    # EMA 200
+    if show_ema200 and not pd.isna(row['EMA_200']):
+        ema200_line.append({"time": time_str, "value": float(row['EMA_200'])})
 
-# Lógica de Fibonacci (Automático ou Manual)
-if show_fib:
-    if fib_mode == "Automático (Recente)" and len(df_1d) >= 60:
-        recent_df = df_1d.tail(60)
-        max_high = recent_df['High'].max()
-        min_low = recent_df['Low'].min()
-    else:
-        max_high = max(manual_top, manual_bottom)
-        min_low = min(manual_top, manual_bottom)
-        
-    diff = max_high - min_low
-    if diff > 0:
-        fib_levels = {
-            "Fib 0.0% (Topo)": max_high,
-            "Fib 23.6%": max_high - 0.236 * diff,
-            "Fib 38.2%": max_high - 0.382 * diff,
-            "Fib 50.0%": max_high - 0.5 * diff,
-            "Fib 61.8% (Ouro)": max_high - 0.618 * diff,
-            "Fib 100.0% (Fundo)": min_low,
-            "Exp 161.8%": max_high + 0.618 * diff
-        }
-        
-        fib_colors = {"Fib 0.0% (Topo)": "gray", "Fib 23.6%": "blue", "Fib 38.2%": "cyan", "Fib 50.0%": "green", "Fib 61.8% (Ouro)": "gold", "Fib 100.0% (Fundo)": "gray", "Exp 161.8%": "magenta"}
-        
-        for label, price in fib_levels.items():
-            fig_chart.add_hline(y=price, line_dash="dot", line_color=fib_colors.get(label, "white"), 
-                                annotation_text=f"{label}: {price:.2f}", annotation_position="right", row=1, col=1)
+# Configuração do painel gráfico estilo TradingView
+chart_options = {
+    "layout": {
+        "background": {"type": "solid", "color": "#131722"},
+        "textColor": "#d1d4dc",
+    },
+    "grid": {
+        "vertLines": {"color": "#1f2937"},
+        "horzLines": {"color": "#1f2937"},
+    },
+    "crosshair": {
+        "mode": 1,
+    },
+    "timeScale": {
+        "borderColor": "#363c4e",
+        "timeVisible": True,
+    },
+    "rightPriceScale": {
+        "borderColor": "#363c4e",
+    }
+}
 
-# 2. Painel de Volume
-colors_vol = ['#ff3344' if row['Close'] < row['Open'] else '#00ff88' for index, row in df_1d.iterrows()]
-fig_chart.add_trace(go.Bar(x=df_1d.index, y=df_1d['Volume'], marker_color=colors_vol, name='Volume'), row=2, col=1)
+# Criando a estrutura de painéis idêntica ao TradingView
+plots = [
+    {
+        "chart": {**chart_options, "height": 450},
+        "series": [
+            {
+                "type": "Candlestick",
+                "data": candles,
+                "options": {
+                    "upColor": "#26a69a",
+                    "downColor": "#ef5350",
+                    "borderVisible": False,
+                    "wickUpColor": "#26a69a",
+                    "wickDownColor": "#ef5350"
+                }
+            },
+            {
+                "type": "Line",
+                "data": ema20_line,
+                "options": {"color": "#ffa726", "lineWidth": 2, "title": "EMA 20"}
+            }
+        ]
+    },
+    {
+        "chart": {**chart_options, "height": 150},
+        "series": [
+            {
+                "type": "Histogram",
+                "data": volumes,
+                "options": {"priceFormat": {"type": "volume"}, "title": "Volume"}
+            }
+        ]
+    }
+]
 
-# 3. Painel RSI
-if show_rsi:
-    fig_chart.add_trace(go.Scatter(x=df_1d.index, y=df_1d['RSI_14'], line=dict(color='#00ffff', width=1.5), name='RSI (14)'), row=3, col=1)
-    fig_chart.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
-    fig_chart.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
+if show_ema200 and ema200_line:
+    plots[0]["series"].append({
+        "type": "Line",
+        "data": ema200_line,
+        "options": {"color": "#ab47bc", "lineWidth": 2, "title": "EMA 200"}
+    })
 
-fig_chart.update_layout(template="plotly_dark", height=700 if show_rsi else 550, margin=dict(l=0, r=50, t=20, b=0), xaxis_rangeslider_visible=False, showlegend=False)
-st.plotly_chart(fig_chart, use_container_width=True)
+# Renderizando o motor do TradingView no Streamlit
+renderLightweightCharts(plots, key='tradingview_chart')
