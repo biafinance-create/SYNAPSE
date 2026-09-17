@@ -49,7 +49,7 @@ class YahooFinanceProvider:
 # 3. INDICADORES E SCORES
 # ==========================================
 def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty or len(df) < 50: return df
+    if df.empty or len(df) < 200: return pd.DataFrame() # Precisa de 200 para a EMA_200
     
     # Tendência (usando a biblioteca 'ta')
     df['EMA_9'] = ta.trend.ema_indicator(df['Close'], window=9)
@@ -77,11 +77,11 @@ def generate_scores(df: pd.DataFrame) -> pd.DataFrame:
     # Trend Score
     bullish_align = (df['EMA_9'] > df['EMA_20']) & (df['EMA_20'] > df['EMA_50'])
     bearish_align = (df['EMA_9'] < df['EMA_20']) & (df['EMA_20'] < df['EMA_50'])
-    adx_norm = np.clip(df['ADX'] / 50 * 100, 0, 100)
+    adx_norm = np.clip(df['ADX'] / 50.0 * 100.0, 0, 100)
     
-    df['Trend_Score'] = 50.0 # <-- O MÁGICO .0 FOI ADICIONADO AQUI
-    df.loc[bullish_align, 'Trend_Score'] = 50.0 + (adx_norm / 2)
-    df.loc[bearish_align, 'Trend_Score'] = 50.0 - (adx_norm / 2)
+    df['Trend_Score'] = 50.0
+    df.loc[bullish_align, 'Trend_Score'] = 50.0 + (adx_norm / 2.0)
+    df.loc[bearish_align, 'Trend_Score'] = 50.0 - (adx_norm / 2.0)
     
     # Momentum Score
     rsi_component = df['RSI_14']
@@ -91,8 +91,8 @@ def generate_scores(df: pd.DataFrame) -> pd.DataFrame:
     # Volume Score
     obv_roc = df['OBV'].pct_change(3).fillna(0)
     obv_signal = np.where(obv_roc > 0, 1.0, -1.0)
-    rvol_capped = np.clip(df['RVOL'], 0, 3)
-    df['Volume_Score'] = np.clip(50.0 + (rvol_capped * obv_signal * 15), 0, 100).astype(float)
+    rvol_capped = np.clip(df['RVOL'], 0, 3.0)
+    df['Volume_Score'] = np.clip(50.0 + (rvol_capped * obv_signal * 15.0), 0, 100).astype(float)
     
     # Composite Score
     df['Composite_Score'] = (
@@ -166,11 +166,15 @@ def load_and_process_data(ticker: str):
     provider = YahooFinanceProvider()
     results = {}
     for tf in ["1H", "1D", "1W"]:
-        df = provider.get_historical_data(ticker, tf)
+        # Pedimos mais dados (10 anos) para garantir que 1D e 1W tenham histórico para as médias móveis
+        period = "730d" if tf == "1H" else "10y"
+        df = provider.get_historical_data(ticker, tf, period=period)
+        
         if not df.empty:
             df = calculate_indicators(df)
-            df = generate_scores(df)
-            results[tf] = df
+            if not df.empty: # Se sobrou dados após limpar
+                df = generate_scores(df)
+                results[tf] = df
     return results
 
 def render_gauge(val: float, title: str):
@@ -198,8 +202,9 @@ model_choice = st.sidebar.selectbox("Modelo Quantitativo", ["Logistic Regression
 # --- ENGINE ---
 data_dict = load_and_process_data(ticker)
 
-if not data_dict or "1D" not in data_dict:
-    st.error("Dados insuficientes ou ativo inválido. Certifique-se de que é um ativo brasileiro válido (ex: VALE3, ITUB4).")
+# Proteção de UI
+if not data_dict or "1D" not in data_dict or data_dict["1D"].empty:
+    st.error(f"Dados insuficientes para calcular os indicadores de {ticker}. Tente outro ativo brasileiro válido (ex: VALE3, ITUB4).")
     st.stop()
 
 df_1d = data_dict["1D"]
@@ -219,15 +224,18 @@ with col1:
     st.markdown("#### PROBABILIDADE DE MOVIMENTO (ML)")
     prob_data = []
     for tf in ["1H", "1D", "1W"]:
-        if tf in data_dict:
+        if tf in data_dict and not data_dict[tf].empty:
             df_tf = data_dict[tf]
             model = QuantitativeModel(tf)
             model.train(df_tf)
             probs = model.predict_probabilities(df_tf.iloc[-1].to_dict())
             prob_data.append({"Timeframe": tf, "UP (%)": probs["UP"], "NEUTRAL (%)": probs["NEUTRAL"], "DOWN (%)": probs["DOWN"]})
             
-    prob_df = pd.DataFrame(prob_data).set_index("Timeframe")
-    st.dataframe(prob_df.style.background_gradient(cmap='Greens', subset=['UP (%)']).background_gradient(cmap='Reds', subset=['DOWN (%)']).format("{:.1f}"), use_container_width=True)
+    if prob_data:
+        prob_df = pd.DataFrame(prob_data).set_index("Timeframe")
+        st.dataframe(prob_df.style.background_gradient(cmap='Greens', subset=['UP (%)']).background_gradient(cmap='Reds', subset=['DOWN (%)']).format("{:.1f}"), use_container_width=True)
+    else:
+        st.warning("Sem dados suficientes para as Probabilidades")
 
 with col2:
     st.markdown("#### MARKET REGIME (1D)")
