@@ -6,3 +6,4 @@ ta
 scikit-learn
 yfinance
 matplotlib
+streamlit-lightweight-charts
