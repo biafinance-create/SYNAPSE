@@ -1,8 +1,7 @@
 streamlit
 pandas
-numpy
+numpy<2.0.0
 plotly
 pandas-ta
 scikit-learn
-xgboost
 yfinance
