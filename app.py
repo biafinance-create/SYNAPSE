@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import yfinance as yf
 import ta
 from datetime import datetime
@@ -49,21 +50,18 @@ class YahooFinanceProvider:
 # 3. INDICADORES E SCORES
 # ==========================================
 def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty or len(df) < 200: return pd.DataFrame() # Precisa de 200 para a EMA_200
+    if df.empty or len(df) < 200: return pd.DataFrame()
     
-    # Tendência (usando a biblioteca 'ta')
     df['EMA_9'] = ta.trend.ema_indicator(df['Close'], window=9)
     df['EMA_20'] = ta.trend.ema_indicator(df['Close'], window=20)
     df['EMA_50'] = ta.trend.ema_indicator(df['Close'], window=50)
     df['EMA_200'] = ta.trend.ema_indicator(df['Close'], window=200)
     df['ADX'] = ta.trend.adx(df['High'], df['Low'], df['Close'], window=14)
     
-    # Momentum
     df['RSI_14'] = ta.momentum.rsi(df['Close'], window=14)
     macd = ta.trend.MACD(df['Close'])
     df['MACDh'] = macd.macd_diff()
     
-    # Volume
     df['OBV'] = ta.volume.on_balance_volume(df['Close'], df['Volume'])
     df['Volume_SMA'] = df['Volume'].rolling(window=20).mean()
     df['RVOL'] = df['Volume'] / df['Volume_SMA']
@@ -74,7 +72,6 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
 def generate_scores(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty: return df
     
-    # Trend Score
     bullish_align = (df['EMA_9'] > df['EMA_20']) & (df['EMA_20'] > df['EMA_50'])
     bearish_align = (df['EMA_9'] < df['EMA_20']) & (df['EMA_20'] < df['EMA_50'])
     adx_norm = np.clip(df['ADX'] / 50.0 * 100.0, 0, 100)
@@ -83,18 +80,15 @@ def generate_scores(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[bullish_align, 'Trend_Score'] = 50.0 + (adx_norm / 2.0)
     df.loc[bearish_align, 'Trend_Score'] = 50.0 - (adx_norm / 2.0)
     
-    # Momentum Score
     rsi_component = df['RSI_14']
     macd_component = np.where(df['MACDh'] > 0, 10.0, -10.0) 
     df['Momentum_Score'] = np.clip(rsi_component + macd_component, 0, 100).astype(float)
     
-    # Volume Score
     obv_roc = df['OBV'].pct_change(3).fillna(0)
     obv_signal = np.where(obv_roc > 0, 1.0, -1.0)
     rvol_capped = np.clip(df['RVOL'], 0, 3.0)
     df['Volume_Score'] = np.clip(50.0 + (rvol_capped * obv_signal * 15.0), 0, 100).astype(float)
     
-    # Composite Score
     df['Composite_Score'] = (
         df['Trend_Score'] * SCORE_WEIGHTS['trend'] +
         df['Momentum_Score'] * SCORE_WEIGHTS['momentum'] +
@@ -125,7 +119,7 @@ class QuantitativeModel:
 
     def train(self, df: pd.DataFrame):
         df_target = self.create_targets(df)
-        if len(df_target) < 10: return # Segurança
+        if len(df_target) < 10: return
         X = df_target[self.features]
         y = df_target['Target']
         X_scaled = self.scaler.fit_transform(X)
@@ -147,7 +141,7 @@ class QuantitativeModel:
         return prob_dict
 
 # ==========================================
-# 5. DASHBOARD UI (STREAMLIT)
+# 5. DASHBOARD UI & TRADINGVIEW ENGINE
 # ==========================================
 st.set_page_config(page_title="SYNAPSE Quant Dashboard", layout="wide", initial_sidebar_state="expanded")
 
@@ -166,13 +160,11 @@ def load_and_process_data(ticker: str):
     provider = YahooFinanceProvider()
     results = {}
     for tf in ["1H", "1D", "1W"]:
-        # Pedimos mais dados (10 anos) para garantir que 1D e 1W tenham histórico para as médias móveis
         period = "730d" if tf == "1H" else "10y"
         df = provider.get_historical_data(ticker, tf, period=period)
-        
         if not df.empty:
             df = calculate_indicators(df)
-            if not df.empty: # Se sobrou dados após limpar
+            if not df.empty:
                 df = generate_scores(df)
                 results[tf] = df
     return results
@@ -197,14 +189,27 @@ def render_gauge(val: float, title: str):
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ CONFIGURAÇÕES")
 ticker = st.sidebar.text_input("Ativo (Ticker)", value="PETR4").upper()
-model_choice = st.sidebar.selectbox("Modelo Quantitativo", ["Logistic Regression", "Rule Based (Em breve)"])
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("🛠️ FERRAMENTAS GRÁFICAS")
+show_fib = st.sidebar.checkbox("Mostrar Fibonacci", value=True)
+fib_mode = st.sidebar.radio("Modo Fibonacci", ["Automático (Recente)", "Manual (Preços Customizados)"])
+
+# Inputs manuais caso o usuário escolha o modo manual
+manual_top = 0.0
+manual_bottom = 0.0
+if show_fib and fib_mode == "Manual (Preços Customizados)":
+    manual_top = st.sidebar.number_input("Preço do Topo (100% ou 0%)", value=35.00)
+    manual_bottom = st.sidebar.number_input("Preço do Fundo (0% ou 100%)", value=30.00)
+
+show_ema200 = st.sidebar.checkbox("Mostrar EMA 200", value=True)
+show_rsi = st.sidebar.checkbox("Mostrar Painel RSI (Inferior)", value=True)
 
 # --- ENGINE ---
 data_dict = load_and_process_data(ticker)
 
-# Proteção de UI
 if not data_dict or "1D" not in data_dict or data_dict["1D"].empty:
-    st.error(f"Dados insuficientes para calcular os indicadores de {ticker}. Tente outro ativo brasileiro válido (ex: VALE3, ITUB4).")
+    st.error(f"Dados insuficientes para calcular os indicadores de {ticker}. Tente outro ativo (ex: VALE3, ITUB4).")
     st.stop()
 
 df_1d = data_dict["1D"]
@@ -234,8 +239,6 @@ with col1:
     if prob_data:
         prob_df = pd.DataFrame(prob_data).set_index("Timeframe")
         st.dataframe(prob_df.style.background_gradient(cmap='Greens', subset=['UP (%)']).background_gradient(cmap='Reds', subset=['DOWN (%)']).format("{:.1f}"), use_container_width=True)
-    else:
-        st.warning("Sem dados suficientes para as Probabilidades")
 
 with col2:
     st.markdown("#### MARKET REGIME (1D)")
@@ -252,10 +255,56 @@ with col2:
     </div>
     """, unsafe_allow_html=True)
 
-# --- ROW 3: CHART ---
-st.markdown("#### CANDLESTICK & TECHNICALS (1D)")
-fig_chart = go.Figure(data=[go.Candlestick(x=df_1d.index, open=df_1d['Open'], high=df_1d['High'], low=df_1d['Low'], close=df_1d['Close'], name="Preço")])
-fig_chart.add_trace(go.Scatter(x=df_1d.index, y=df_1d['EMA_20'], line=dict(color='orange', width=1), name='EMA 20'))
-fig_chart.add_trace(go.Scatter(x=df_1d.index, y=df_1d['EMA_200'], line=dict(color='purple', width=2), name='EMA 200'))
-fig_chart.update_layout(template="plotly_dark", height=500, margin=dict(l=0, r=0, t=0, b=0), xaxis_rangeslider_visible=False)
+# --- ROW 3: TRADINGVIEW STYLE CHART + FIBONACCI ---
+st.markdown("#### 📈 GRÁFICO AVANÇADO & FIBONACCI (1D)")
+
+row_heights = [0.6, 0.2, 0.2] if show_rsi else [0.75, 0.25]
+fig_chart = make_subplots(rows=len(row_heights), cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=row_heights)
+
+# 1. Candlestick principal
+fig_chart.add_trace(go.Candlestick(x=df_1d.index, open=df_1d['Open'], high=df_1d['High'], low=df_1d['Low'], close=df_1d['Close'], name="Preço"), row=1, col=1)
+fig_chart.add_trace(go.Scatter(x=df_1d.index, y=df_1d['EMA_20'], line=dict(color='orange', width=1), name='EMA 20'), row=1, col=1)
+
+if show_ema200:
+    fig_chart.add_trace(go.Scatter(x=df_1d.index, y=df_1d['EMA_200'], line=dict(color='purple', width=2), name='EMA 200'), row=1, col=1)
+
+# Lógica de Fibonacci (Automático ou Manual)
+if show_fib:
+    if fib_mode == "Automático (Recente)" and len(df_1d) >= 60:
+        recent_df = df_1d.tail(60)
+        max_high = recent_df['High'].max()
+        min_low = recent_df['Low'].min()
+    else:
+        max_high = max(manual_top, manual_bottom)
+        min_low = min(manual_top, manual_bottom)
+        
+    diff = max_high - min_low
+    if diff > 0:
+        fib_levels = {
+            "Fib 0.0% (Topo)": max_high,
+            "Fib 23.6%": max_high - 0.236 * diff,
+            "Fib 38.2%": max_high - 0.382 * diff,
+            "Fib 50.0%": max_high - 0.5 * diff,
+            "Fib 61.8% (Ouro)": max_high - 0.618 * diff,
+            "Fib 100.0% (Fundo)": min_low,
+            "Exp 161.8%": max_high + 0.618 * diff
+        }
+        
+        fib_colors = {"Fib 0.0% (Topo)": "gray", "Fib 23.6%": "blue", "Fib 38.2%": "cyan", "Fib 50.0%": "green", "Fib 61.8% (Ouro)": "gold", "Fib 100.0% (Fundo)": "gray", "Exp 161.8%": "magenta"}
+        
+        for label, price in fib_levels.items():
+            fig_chart.add_hline(y=price, line_dash="dot", line_color=fib_colors.get(label, "white"), 
+                                annotation_text=f"{label}: {price:.2f}", annotation_position="right", row=1, col=1)
+
+# 2. Painel de Volume
+colors_vol = ['#ff3344' if row['Close'] < row['Open'] else '#00ff88' for index, row in df_1d.iterrows()]
+fig_chart.add_trace(go.Bar(x=df_1d.index, y=df_1d['Volume'], marker_color=colors_vol, name='Volume'), row=2, col=1)
+
+# 3. Painel RSI
+if show_rsi:
+    fig_chart.add_trace(go.Scatter(x=df_1d.index, y=df_1d['RSI_14'], line=dict(color='#00ffff', width=1.5), name='RSI (14)'), row=3, col=1)
+    fig_chart.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
+    fig_chart.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
+
+fig_chart.update_layout(template="plotly_dark", height=700 if show_rsi else 550, margin=dict(l=0, r=50, t=20, b=0), xaxis_rangeslider_visible=False, showlegend=False)
 st.plotly_chart(fig_chart, use_container_width=True)
