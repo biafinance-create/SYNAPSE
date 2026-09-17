@@ -79,27 +79,28 @@ def generate_scores(df: pd.DataFrame) -> pd.DataFrame:
     bearish_align = (df['EMA_9'] < df['EMA_20']) & (df['EMA_20'] < df['EMA_50'])
     adx_norm = np.clip(df['ADX'] / 50 * 100, 0, 100)
     
-    df['Trend_Score'] = 50
-    df.loc[bullish_align, 'Trend_Score'] = 50 + (adx_norm / 2)
-    df.loc[bearish_align, 'Trend_Score'] = 50 - (adx_norm / 2)
+    df['Trend_Score'] = 50.0 # <-- O MÁGICO .0 FOI ADICIONADO AQUI
+    df.loc[bullish_align, 'Trend_Score'] = 50.0 + (adx_norm / 2)
+    df.loc[bearish_align, 'Trend_Score'] = 50.0 - (adx_norm / 2)
     
     # Momentum Score
     rsi_component = df['RSI_14']
-    macd_component = np.where(df['MACDh'] > 0, 10, -10) 
-    df['Momentum_Score'] = np.clip(rsi_component + macd_component, 0, 100)
+    macd_component = np.where(df['MACDh'] > 0, 10.0, -10.0) 
+    df['Momentum_Score'] = np.clip(rsi_component + macd_component, 0, 100).astype(float)
     
     # Volume Score
     obv_roc = df['OBV'].pct_change(3).fillna(0)
-    obv_signal = np.where(obv_roc > 0, 1, -1)
+    obv_signal = np.where(obv_roc > 0, 1.0, -1.0)
     rvol_capped = np.clip(df['RVOL'], 0, 3)
-    df['Volume_Score'] = np.clip(50 + (rvol_capped * obv_signal * 15), 0, 100)
+    df['Volume_Score'] = np.clip(50.0 + (rvol_capped * obv_signal * 15), 0, 100).astype(float)
     
     # Composite Score
     df['Composite_Score'] = (
         df['Trend_Score'] * SCORE_WEIGHTS['trend'] +
         df['Momentum_Score'] * SCORE_WEIGHTS['momentum'] +
         df['Volume_Score'] * SCORE_WEIGHTS['volume']
-    )
+    ).astype(float)
+    
     return df
 
 # ==========================================
