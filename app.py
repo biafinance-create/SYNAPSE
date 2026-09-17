@@ -257,16 +257,16 @@ with col2:
     </div>
     """, unsafe_allow_html=True)
 
-# --- ROW 3: TRADINGVIEW NATIVE ENGINE COM HORAS EXATAS ---
+# --- ROW 3: TRADINGVIEW NATIVE ENGINE COM HORAS EXATAS BLINDADO ---
 st.markdown(f"#### 📈 TRADINGVIEW ENGINE CHART ({selected_tf})")
 
-df_chart = df_current.reset_index()
+df_chart = df_current.copy()
+time_col = df_chart.index
 
-# Formatação dinâmica de tempo: se for 1H, exibe ano-mês-dia e horas (YYYY-MM-DD HH:mm). Se for 1D/1W, exibe apenas a data.
 if selected_tf == "1H":
-    df_chart['time'] = df_chart['Date'].dt.strftime('%Y-%m-%d %H:%M')
+    df_chart['time'] = time_col.strftime('%Y-%m-%d %H:%M')
 else:
-    df_chart['time'] = df_chart['Date'].dt.strftime('%Y-%m-%d')
+    df_chart['time'] = time_col.strftime('%Y-%m-%d')
 
 candles = []
 volumes = []
