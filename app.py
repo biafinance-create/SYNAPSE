@@ -57,12 +57,12 @@ class YahooFinanceProvider:
 # 3. INDICADORES E SCORES
 # ==========================================
 def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty or len(df) < 200: return pd.DataFrame()
+    if df.empty or len(df) < 50: return pd.DataFrame()
     
     df['EMA_9'] = ta.trend.ema_indicator(df['Close'], window=9)
     df['EMA_20'] = ta.trend.ema_indicator(df['Close'], window=20)
     df['EMA_50'] = ta.trend.ema_indicator(df['Close'], window=50)
-    df['EMA_200'] = ta.trend.ema_indicator(df['Close'], window=200)
+    df['EMA_200'] = ta.trend.ema_indicator(df['Close'], window=200) if len(df) >= 200 else pd.Series(index=df.index, dtype=float)
     df['ADX'] = ta.trend.adx(df['High'], df['Low'], df['Close'], window=14)
     
     df['RSI_14'] = ta.momentum.rsi(df['Close'], window=14)
@@ -199,25 +199,29 @@ st.sidebar.title("⚙️ CONFIGURAÇÕES")
 ticker = st.sidebar.text_input("Ativo (Ticker)", value="PETR4").upper()
 
 st.sidebar.markdown("---")
+st.sidebar.subheader("📊 TEMPO GRÁFICO (TIMEFRAME)")
+selected_tf = st.sidebar.selectbox("Escolha o Timeframe do Gráfico", ["1H", "1D", "1W"], index=1)
+
+st.sidebar.markdown("---")
 st.sidebar.subheader("🛠️ CONFIGURAÇÕES DE TELA")
 show_ema200 = st.sidebar.checkbox("Mostrar EMA 200", value=True)
 
 # --- ENGINE ---
 data_dict = load_and_process_data(ticker)
 
-if not data_dict or "1D" not in data_dict or data_dict["1D"].empty:
-    st.error(f"Dados insuficientes para calcular os indicadores de {ticker}. Tente outro ativo (ex: VALE3, ITUB4).")
+if not data_dict or selected_tf not in data_dict or data_dict[selected_tf].empty:
+    st.error(f"Dados insuficientes para o timeframe {selected_tf} de {ticker}. Tente outro ativo ou período.")
     st.stop()
 
-df_1d = data_dict["1D"]
-latest_1d = df_1d.iloc[-1]
+df_current = data_dict[selected_tf]
+latest_bar = df_current.iloc[-1]
 
 current_time_br = datetime.now(BR_TIME).strftime('%H:%M')
-st.markdown(f"### SYNAPSE QUANTITATIVE DASHBOARD | **{ticker}** | Atualizado: {current_time_br} (Brasília)")
+st.markdown(f"### SYNAPSE QUANTITATIVE DASHBOARD | **{ticker}** ({selected_tf}) | Atualizado: {current_time_br} (Brasília)")
 
 # --- ROW 1: SCORES ---
 cols = st.columns(4)
-scores = [("VOLUME", latest_1d['Volume_Score']), ("MOMENTUM", latest_1d['Momentum_Score']), ("TREND", latest_1d['Trend_Score']), ("COMPOSITE", latest_1d['Composite_Score'])]
+scores = [("VOLUME", latest_bar['Volume_Score']), ("MOMENTUM", latest_bar['Momentum_Score']), ("TREND", latest_bar['Trend_Score']), ("COMPOSITE", latest_bar['Composite_Score'])]
 for col, (title, val) in zip(cols, scores):
     with col: st.plotly_chart(render_gauge(val, title), use_container_width=True)
 
@@ -239,25 +243,30 @@ with col1:
         st.dataframe(prob_df.style.background_gradient(cmap='Greens', subset=['UP (%)']).background_gradient(cmap='Reds', subset=['DOWN (%)']).format("{:.1f}"), use_container_width=True)
 
 with col2:
-    st.markdown("#### MARKET REGIME (1D)")
-    adx_val = latest_1d[[c for c in df_1d.columns if c.startswith('ADX')][0]]
+    st.markdown(f"#### MARKET REGIME ({selected_tf})")
+    adx_val = latest_bar[[c for c in df_current.columns if c.startswith('ADX')][0]]
     regime = "SIDEWAYS"
-    if adx_val > 25: regime = "TRENDING BULL" if latest_1d['Trend_Score'] > 50 else "TRENDING BEAR"
+    if adx_val > 25: regime = "TRENDING BULL" if latest_bar['Trend_Score'] > 50 else "TRENDING BEAR"
     regime_color = "bullish" if "BULL" in regime else "bearish" if "BEAR" in regime else "neutral"
     
     st.markdown(f"""
     <div class="metric-card">
         <div style="color: #888;">REGIME ATUAL</div>
         <div class="metric-value {regime_color}">{regime}</div><br>
-        <div style="text-align: left; font-size: 14px;">ADX: {adx_val:.1f} | RVOL: {latest_1d['RVOL']:.2f}x</div>
+        <div style="text-align: left; font-size: 14px;">ADX: {adx_val:.1f} | RVOL: {latest_bar['RVOL']:.2f}x</div>
     </div>
     """, unsafe_allow_html=True)
 
-# --- ROW 3: TRADINGVIEW NATIVE ENGINE ---
-st.markdown("#### 📈 TRADINGVIEW ENGINE CHART (1D)")
+# --- ROW 3: TRADINGVIEW NATIVE ENGINE COM HORAS EXATAS ---
+st.markdown(f"#### 📈 TRADINGVIEW ENGINE CHART ({selected_tf})")
 
-df_chart = df_1d.reset_index()
-df_chart['time'] = df_chart['Date'].dt.strftime('%Y-%m-%d')
+df_chart = df_current.reset_index()
+
+# Formatação dinâmica de tempo: se for 1H, exibe ano-mês-dia e horas (YYYY-MM-DD HH:mm). Se for 1D/1W, exibe apenas a data.
+if selected_tf == "1H":
+    df_chart['time'] = df_chart['Date'].dt.strftime('%Y-%m-%d %H:%M')
+else:
+    df_chart['time'] = df_chart['Date'].dt.strftime('%Y-%m-%d')
 
 candles = []
 volumes = []
@@ -281,7 +290,7 @@ for _, row in df_chart.iterrows():
     })
     if not pd.isna(row['EMA_20']):
         ema20_line.append({"time": time_str, "value": float(row['EMA_20'])})
-    if show_ema200 and not pd.isna(row['EMA_200']):
+    if show_ema200 and 'EMA_200' in row and not pd.isna(row['EMA_200']):
         ema200_line.append({"time": time_str, "value": float(row['EMA_200'])})
 
 chart_options = {
@@ -299,6 +308,7 @@ chart_options = {
     "timeScale": {
         "borderColor": "#363c4e",
         "timeVisible": True,
+        "secondsVisible": False,
     },
     "rightPriceScale": {
         "borderColor": "#363c4e",
@@ -346,4 +356,4 @@ if show_ema200 and ema200_line:
         "options": {"color": "#ab47bc", "lineWidth": 2, "title": "EMA 200"}
     })
 
-renderLightweightCharts(plots, key='tradingview_chart')
+renderLightweightCharts(plots, key=f'tradingview_chart_{selected_tf}')
