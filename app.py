@@ -3,14 +3,16 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import ta
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from streamlit_lightweight_charts import renderLightweightCharts
 
 # ==========================================
-# 1. CONFIGURAÇÕES CENTRAIS
+# 1. CONFIGURAÇÕES CENTRAIS & FUSO HORÁRIO
 # ==========================================
+BR_TIME = timezone(timedelta(hours=-3))
+
 SCORE_WEIGHTS = {
     "volume": 0.25,
     "momentum": 0.30,
@@ -24,7 +26,7 @@ TARGET_THRESHOLDS = {
 }
 
 # ==========================================
-# 2. CAMADA DE DADOS
+# 2. CAMADA DE DADOS (COM FUSO DE BRASÍLIA)
 # ==========================================
 class YahooFinanceProvider:
     def __init__(self):
@@ -41,6 +43,12 @@ class YahooFinanceProvider:
             
         if isinstance(data.columns, pd.MultiIndex):
             data.columns = data.columns.get_level_values(0)
+            
+        # Tratamento rigoroso de Fuso Horário para Brasília (UTC-3)
+        if data.index.tz is not None:
+            data.index = data.index.tz_convert('America/Sao_Paulo')
+        else:
+            data.index = data.index.tz_localize('UTC').tz_convert('America/Sao_Paulo')
             
         data.dropna(inplace=True)
         return data
@@ -204,7 +212,8 @@ if not data_dict or "1D" not in data_dict or data_dict["1D"].empty:
 df_1d = data_dict["1D"]
 latest_1d = df_1d.iloc[-1]
 
-st.markdown(f"### SYNAPSE QUANTITATIVE DASHBOARD | **{ticker}** | Atualizado: {datetime.now().strftime('%H:%M')}")
+current_time_br = datetime.now(BR_TIME).strftime('%H:%M')
+st.markdown(f"### SYNAPSE QUANTITATIVE DASHBOARD | **{ticker}** | Atualizado: {current_time_br} (Brasília)")
 
 # --- ROW 1: SCORES ---
 cols = st.columns(4)
@@ -247,9 +256,7 @@ with col2:
 # --- ROW 3: TRADINGVIEW NATIVE ENGINE ---
 st.markdown("#### 📈 TRADINGVIEW ENGINE CHART (1D)")
 
-# Formatando dados para o Lightweight Charts (TradingView nativo)
 df_chart = df_1d.reset_index()
-# Garantindo o formato de data YYYY-MM-DD
 df_chart['time'] = df_chart['Date'].dt.strftime('%Y-%m-%d')
 
 candles = []
@@ -259,7 +266,6 @@ ema200_line = []
 
 for _, row in df_chart.iterrows():
     time_str = row['time']
-    # Candlestick
     candles.append({
         "time": time_str,
         "open": float(row['Open']),
@@ -267,21 +273,17 @@ for _, row in df_chart.iterrows():
         "low": float(row['Low']),
         "close": float(row['Close'])
     })
-    # Volume com cores dinâmicas do TradingView (Verde/Vermelho)
     vol_color = '#ef5350' if row['Close'] < row['Open'] else '#26a69a'
     volumes.append({
         "time": time_str,
         "value": float(row['Volume']),
         "color": vol_color
     })
-    # EMA 20
     if not pd.isna(row['EMA_20']):
         ema20_line.append({"time": time_str, "value": float(row['EMA_20'])})
-    # EMA 200
     if show_ema200 and not pd.isna(row['EMA_200']):
         ema200_line.append({"time": time_str, "value": float(row['EMA_200'])})
 
-# Configuração do painel gráfico estilo TradingView
 chart_options = {
     "layout": {
         "background": {"type": "solid", "color": "#131722"},
@@ -303,7 +305,6 @@ chart_options = {
     }
 }
 
-# Criando a estrutura de painéis idêntica ao TradingView
 plots = [
     {
         "chart": {**chart_options, "height": 450},
@@ -345,5 +346,4 @@ if show_ema200 and ema200_line:
         "options": {"color": "#ab47bc", "lineWidth": 2, "title": "EMA 200"}
     })
 
-# Renderizando o motor do TradingView no Streamlit
 renderLightweightCharts(plots, key='tradingview_chart')
