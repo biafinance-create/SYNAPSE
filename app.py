@@ -1,3 +1,26 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import yfinance as yf
+from datetime import datetime
+
+# Configuração da página do Streamlit
+st.set_page_config(
+    page_title="Dashboard de Análise de Ações - Synapse",
+    page_icon="📈",
+    layout="wide"
+)
+
+st.title("📊 Painel de Análise Quantitativa e Volumétrica")
+st.markdown("Monitoramento de ativos da B3 com score de volume, força de tendência e probabilidades multi-timeframe.")
+
+# Lista de ativos de exemplo
+ativos_padrao = ["VALE3.SA", "PETR4.SA", "ABEV3.SA", "ITUB4.SA", "BBDC4.SA", "BPAC11.SA"]
+
+st.sidebar.header("Configurações do Painel")
+ativos_selecionados = st.sidebar.multiselect("Selecione os Ativos:", ativos_padrao, default=ativos_padrao)
+
+# Função para calcular os indicadores técnicos e o score de volume
 @st.cache_data(ttl=1800)
 def analisar_ativo(ticker):
     try:
@@ -116,3 +139,57 @@ def analisar_ativo(ticker):
     except Exception as e:
         print(f"Erro ao processar {ticker}: {e}")
         return None
+
+# Definindo o fragmento com atualização automática a cada 1 hora (3600 segundos)
+@st.fragment(run_every="3600s")
+def renderizar_painel():
+    st.caption(f"🔄 Última atualização automática: {datetime.now().strftime('%H:%M:%S')}")
+    
+    if not ativos_selecionados:
+        st.warning("Selecione pelo menos um ativo na barra lateral.")
+        return
+
+    with st.spinner("Atualizando dados e recalculando indicadores..."):
+        dados_tabela = [analisar_ativo(t) for t in ativos_selecionados]
+        dados_tabela = [d for d in dados_tabela if d is not None]
+
+    if dados_tabela:
+        df_display = pd.DataFrame(dados_tabela)
+
+        st.subheader("Painel de Decisão por Ativo")
+        
+        # Cabeçalho visual da tabela customizada
+        h_cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
+        headers = ["Ticker", "Volume (1-5)", "Tendência", "Força", "Prob 1H", "Prob 1D", "Prob 1S", "Sinal Final"]
+        for col, h in zip(h_cols, headers):
+            col.markdown(f"**{h}**")
+        st.divider()
+
+        # Linhas de dados
+        for idx, row in df_display.iterrows():
+            cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
+            
+            with cols[0]:
+                st.markdown(f"**{row['Ticker']}**")
+            with cols[1]:
+                cor_vol = "🟢" if row['Vol Positivo'] else "🔴"
+                st.markdown(f"**{row['Score Volume']}/5** {cor_vol}")
+            with cols[2]:
+                st.markdown(f"{row['Tendência']}")
+            with cols[3]:
+                st.markdown(f"{row['Força']}")
+            with cols[4]:
+                st.markdown(f"{row['Prob 1H']}")
+            with cols[5]:
+                st.markdown(f"{row['Prob 1D']}")
+            with cols[6]:
+                st.markdown(f"{row['Prob 1S']}")
+            with cols[7]:
+                st.markdown(f"**{row['Sinal Final']}**")
+            
+            st.divider()
+    else:
+        st.error("Não foi possível carregar os dados para os ativos selecionados.")
+
+# Executa o painel com atualização programada
+renderizar_painel()
