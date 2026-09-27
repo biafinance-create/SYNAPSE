@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilização CSS para o cabeçalho fixo na tela inteira ao rolar
+# Estilização CSS para o cabeçalho fixo da tabela ao rolar
 st.markdown("""
     <style>
         .fixed-header {
@@ -28,8 +28,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 Painel de Análise Quantitativa e Volumétrica - B3")
-st.markdown("Monitoramento completo do mercado acionário brasileiro com score de volume, força por desvio padrão e probabilidades sincronizadas.")
+# BARRA LATERAL COM A NAVEGAÇÃO SOLICITADA
+st.sidebar.title("🧭 Navegação Synapse")
+pagina_selecionada = st.sidebar.radio("Selecione o Módulo:", ["MARKET X-RAY", "MARKET FEELING"])
 
 # Lista abrangente de ativos da B3
 lista_b3 = [
@@ -67,7 +68,6 @@ def analisar_ativo(ticker):
         df['Banda_Superior'] = df['MA20'] + (2 * df['STD20'])
         df['Banda_Inferior'] = df['MA20'] - (2 * df['STD20'])
         
-        # Largura relativa das Bandas de Bollinger (Mede o desvio padrão e compressão)
         largura_bandas = ((df['Banda_Superior'] - df['Banda_Inferior']) / df['MA20']).iloc[-1]
         
         if largura_bandas > 0.08:
@@ -112,7 +112,7 @@ def analisar_ativo(ticker):
             tendencia = "Lateral 🦀"
             tendencia_val = 0
 
-        # 5. SINAL FINAL INTELIGENTE (Exige Força Moderada ou Forte e Volume >= 3)
+        # 5. SINAL FINAL INTELIGENTE
         if tendencia_val == 1 and score_vol >= 3 and forca_val > 0:
             sinal = "LONG 🟢"
             status_orquestra = 1 
@@ -123,7 +123,7 @@ def analisar_ativo(ticker):
             sinal = "NEUTRO ⚪"
             status_orquestra = 0
 
-        # 6. PROBABILIDADES SINCRONIZADAS COM A ORQUESTRA
+        # 6. PROBABILIDADES SINCRONIZADAS
         if status_orquestra == 1 or status_orquestra == -1:
             prob_1h = np.random.randint(65, 76)
             prob_1d = np.random.randint(72, 83)
@@ -150,6 +150,7 @@ def analisar_ativo(ticker):
 
         return {
             "Ticker": ticker_limpo,
+            "Volume_Score": score_vol,
             "Volume (1-5)": f"{score_vol}/5 {vol_positivo}",
             "Tendência": tendencia,
             "Força": forca_str,
@@ -165,18 +166,24 @@ def analisar_ativo(ticker):
 @st.fragment(run_every="3600s")
 def renderizar_painel():
     horario_brasilia = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime('%H:%M:%S')
-    st.caption(f"🔄 Última atualização automática (Horário de Brasília): {horario_brasilia}")
     
     with st.spinner("Analisando ativos da B3 em lote..."):
         dados_tabela = [analisar_ativo(t) for t in lista_b3]
         dados_tabela = [d for d in dados_tabela if d is not None]
 
-    if dados_tabela:
-        df_display = pd.DataFrame(dados_tabela)
+    if not dados_tabela:
+        st.error("Não foi possível carregar os dados dos ativos.")
+        return
 
-        st.subheader("Painel Geral de Oportunidades")
+    df_display = pd.DataFrame(dados_tabela)
+
+    # ABA 1: MARKET X-RAY (A Tabela Completa de Ativos)
+    if pagina_selecionada == "MARKET X-RAY":
+        st.title("🔬 Market X-Ray - Análise Quantitativa Detalhada")
+        st.markdown(f"Monitoramento individual dos ativos da B3. *Última atualização: {horario_brasilia} (Brasília)*")
+        st.divider()
         
-        # CABEÇALHO FIXO NA TELA INTEIRA AO ROLAR
+        # CABEÇALHO FIXO
         st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
         header_cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
         headers = ["Ticker", "Volume (1-5)", "Tendência", "Força", "Prob 1H", "Prob 1D", "Prob 1S", "Sinal Final"]
@@ -184,7 +191,7 @@ def renderizar_painel():
             col.markdown(f"**{h}**")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # LISTA DE ATIVOS
+        # LINHAS DOS ATIVOS
         for idx, row in df_display.iterrows():
             cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
             
@@ -216,7 +223,66 @@ def renderizar_painel():
                 st.markdown(f"**{row['Sinal Final']}**")
             
             st.divider()
-    else:
-        st.error("Não foi possível carregar os dados dos ativos.")
+
+    # ABA 2: MARKET FEELING (As 3 Caixinhas de Resumo Macro)
+    elif pagina_selecionada == "MARKET FEELING":
+        st.title("🌡️ Market Feeling - Termômetro Macro do Mercado")
+        st.markdown(f"Visão executiva e agregada do sentimento atual da B3. *Última atualização: {horario_brasilia} (Brasília)*")
+        st.divider()
+
+        # Calculando as métricas para as 3 caixinhas
+        total_ativos = len(df_display)
+        
+        # 1. Sentimento Geral (Contagem de Tendências)
+        tot_bull = len(df_display[df_display['Tendência'].str.contains("Bull")])
+        tot_bear = len(df_display[df_display['Tendência'].str.contains("Bear")])
+        tot_lateral = len(df_display[df_display['Tendência'].str.contains("Lateral")])
+        
+        perc_alta = int((tot_bull / total_ativos) * 100) if total_ativos > 0 else 0
+        
+        # 2. Pressão de Volume (Ativos com volume forte >= 3)
+        ativos_vol_forte = len(df_display[df_display['Volume_Score'] >= 3])
+        perc_volume = int((ativos_vol_forte / total_ativos) * 100) if total_ativos > 0 else 0
+
+        # 3. Oportunidades Ativas (Sinais Long / Short)
+        tot_long = len(df_display[df_display['Sinal Final'].str.contains("LONG")])
+        tot_short = len(df_display[df_display['Sinal Final'].str.contains("SHORT")])
+        tot_neutro = len(df_display[df_display['Sinal Final'].str.contains("NEUTRO")])
+
+        # Exibindo as 3 Caixinhas (Metrics do Streamlit)
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                label="🐂 Sentimento Geral da B3", 
+                value=f"{perc_alta}% Alta", 
+                delta=f"{tot_bull} Bull | {tot_bear} Bear | {tot_lateral} Lateral"
+            )
+            st.info("Mede o percentual de ativos da amostra negociando acima das médias móveis de tendência.")
+
+        with col2:
+            st.metric(
+                label="📊 Pressão de Fluxo (Volume)", 
+                value=f"{ativos_vol_forte} / {total_ativos} Ativos", 
+                delta=f"{perc_volume}% com Volume Saudável (≥3)"
+            )
+            st.warning("Indica se o mercado está tendo fluxo financeiro institucional ou operando no vazio.")
+
+        with col3:
+            st.metric(
+                label="🎯 Oportunidades de Trade", 
+                value=f"{tot_long} Long | {tot_short} Short", 
+                delta=f"{tot_neutro} Ativos Neutros / De Fora"
+            )
+            st.success("Contagem de ativos com alinhamento completo na orquestra prontos para execução.")
+
+        st.divider()
+        st.subheader("💡 Resumo Executivo para Tomada de Decisão")
+        if tot_long > tot_short:
+            st.markdown("🟢 **Viés Atual:** O mercado apresenta leve predominância de oportunidades compradoras. Foque nos ativos com volume alto e tendência Bull.")
+        elif tot_short > tot_long:
+            st.markdown("🔴 **Viés Atual:** Pressão vendedora predominante. Atenção aos ativos em Bear Market com expansão de volatilidade.")
+        else:
+            st.markdown("⚪ **Viés Atual:** Mercado predominantemente travado ou lateral. A recomendação quantitativa é **preservar capital** e aguardar o rompimento dos ranges.")
 
 renderizar_painel()
