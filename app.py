@@ -12,13 +12,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilização CSS para o cabeçalho ficar fixo na janela inteira da página
+# Estilização CSS para o cabeçalho fixo na tela inteira ao rolar
 st.markdown("""
     <style>
-        /* Torna o cabeçalho fixo no topo da página inteira ao rolar */
         .fixed-header {
             position: sticky;
-            top: 45px; /* Distância do topo da página do Streamlit */
+            top: 45px;
             background-color: #0e1117;
             z-index: 999;
             padding-top: 15px;
@@ -124,15 +123,21 @@ def analisar_ativo(ticker):
             forca = f"Fraca ({int(adx)})"
             forca_val = 0
 
-        # 6. Probabilidades (1H, 1D, 1S)
+        # 6. Probabilidades (1H, 1D, 1S) com setas direcionais coloridas
         base_prob = 50 + (tendencia_val * 15) + (forca_val * 10)
-        prob_1h = np.clip(int(base_prob + np.random.randint(-5, 6)), 20, 85)
-        prob_1d = np.clip(int(base_prob + (tendencia_val * 10)), 15, 90)
-        prob_1s = np.clip(int(base_prob + (tendencia_val * 15)), 10, 95)
         
-        prob_1h_str = f"📈 {prob_1h}%" if tendencia_val >= 0 else f"📉 {100-prob_1h}%"
-        prob_1d_str = f"📈 {prob_1d}%" if tendencia_val >= 0 else f"📉 {100-prob_1d}%"
-        prob_1s_str = f"📈 {prob_1s}%" if tendencia_val >= 0 else f"📉 {100-prob_1s}%"
+        prob_1h = np.clip(int(base_prob + np.random.randint(-5, 6)), 20, 85)
+        dir_1h = "🟢 📈" if prob_1h >= 50 else "🔴 📉"
+        
+        prob_1d = np.clip(int(base_prob + (tendencia_val * 10)), 15, 90)
+        dir_1d = "🟢 📈" if prob_1d >= 50 else "🔴 📉"
+        
+        prob_1s = np.clip(int(base_prob + (tendencia_val * 15)), 10, 95)
+        dir_1s = "🟢 📈" if prob_1s >= 50 else "🔴 📉"
+        
+        prob_1h_str = f"{dir_1h} {prob_1h}%"
+        prob_1d_str = f"{dir_1d} {prob_1d}%"
+        prob_1s_str = f"{dir_1s} {prob_1s}%"
 
         # 7. SINAL FINAL INTELIGENTE
         if tendencia_val == 1 and score_vol >= 3 and adx > 20:
@@ -180,7 +185,7 @@ def renderizar_painel():
             col.markdown(f"**{h}**")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # LISTA DE ATIVOS QUE ROLAM LIVREMENTE POR BAIXO DO CABEÇALHO
+        # LISTA DE ATIVOS
         for idx, row in df_display.iterrows():
             cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
             
@@ -213,6 +218,6 @@ def renderizar_painel():
             
             st.divider()
     else:
-        st.error("Não foi possível carregar los dados dos ativos.")
+        st.error("Não foi possível carregar os dados dos ativos.")
 
 renderizar_painel()
