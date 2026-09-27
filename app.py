@@ -28,7 +28,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# BARRA LATERAL COM A NAVEGAÇÃO SOLICITADA
+# BARRA LATERAL COM A NAVEGAÇÃO
 st.sidebar.title("🧭 Navegação Synapse")
 pagina_selecionada = st.sidebar.radio("Selecione o Módulo:", ["MARKET X-RAY", "MARKET FEELING"])
 
@@ -162,6 +162,53 @@ def analisar_ativo(ticker):
     except Exception as e:
         return None
 
+# Função auxiliar para renderizar a tabela limpa de ativos
+def exibir_tabela_ativos(dataframe):
+    if dataframe.empty:
+        st.info("Nenhum ativo encontrado para este filtro no momento.")
+        return
+
+    # Cabeçalho Fixo
+    st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
+    header_cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
+    headers = ["Ticker", "Volume (1-5)", "Tendência", "Força", "Prob 1H", "Prob 1D", "Prob 1S", "Sinal Final"]
+    for col, h in zip(header_cols, headers):
+        col.markdown(f"**{h}**")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Linhas dos Ativos
+    for idx, row in dataframe.iterrows():
+        cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
+        
+        with cols[0]:
+            st.markdown(
+                f"""
+                <div style="display: flex; align-items: center; gap: 10px; padding: 4px 0;">
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: #1e293b; color: #38bdf8; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 1px solid #334155; flex-shrink: 0;">
+                        {row['Ticker'][:2]}
+                    </div>
+                    <span style="font-weight: bold; font-size: 15px; color: #f8fafc;">{row['Ticker']}</span>
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
+        with cols[1]:
+            st.markdown(row['Volume (1-5)'])
+        with cols[2]:
+            st.markdown(row['Tendência'])
+        with cols[3]:
+            st.markdown(row['Força'])
+        with cols[4]:
+            st.markdown(row['Prob 1H'])
+        with cols[5]:
+            st.markdown(row['Prob 1D'])
+        with cols[6]:
+            st.markdown(row['Prob 1S'])
+        with cols[7]:
+            st.markdown(f"**{row['Sinal Final']}**")
+        
+        st.divider()
+
 # Fragmento com atualização automática a cada 1 hora
 @st.fragment(run_every="3600s")
 def renderizar_painel():
@@ -177,79 +224,33 @@ def renderizar_painel():
 
     df_display = pd.DataFrame(dados_tabela)
 
-    # ABA 1: MARKET X-RAY (A Tabela Completa de Ativos)
+    # ABA 1: MARKET X-RAY
     if pagina_selecionada == "MARKET X-RAY":
         st.title("🔬 Market X-Ray - Análise Quantitativa Detalhada")
         st.markdown(f"Monitoramento individual dos ativos da B3. *Última atualização: {horario_brasilia} (Brasília)*")
         st.divider()
-        
-        # CABEÇALHO FIXO
-        st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
-        header_cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
-        headers = ["Ticker", "Volume (1-5)", "Tendência", "Força", "Prob 1H", "Prob 1D", "Prob 1S", "Sinal Final"]
-        for col, h in zip(header_cols, headers):
-            col.markdown(f"**{h}**")
-        st.markdown('</div>', unsafe_allow_html=True)
+        exibir_tabela_ativos(df_display)
 
-        # LINHAS DOS ATIVOS
-        for idx, row in df_display.iterrows():
-            cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
-            
-            with cols[0]:
-                st.markdown(
-                    f"""
-                    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 0;">
-                        <div style="width: 28px; height: 28px; border-radius: 50%; background: #1e293b; color: #38bdf8; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 1px solid #334155; flex-shrink: 0;">
-                            {row['Ticker'][:2]}
-                        </div>
-                        <span style="font-weight: bold; font-size: 15px; color: #f8fafc;">{row['Ticker']}</span>
-                    </div>
-                    """, 
-                    unsafe_allow_html=True
-                )
-            with cols[1]:
-                st.markdown(row['Volume (1-5)'])
-            with cols[2]:
-                st.markdown(row['Tendência'])
-            with cols[3]:
-                st.markdown(row['Força'])
-            with cols[4]:
-                st.markdown(row['Prob 1H'])
-            with cols[5]:
-                st.markdown(row['Prob 1D'])
-            with cols[6]:
-                st.markdown(row['Prob 1S'])
-            with cols[7]:
-                st.markdown(f"**{row['Sinal Final']}**")
-            
-            st.divider()
-
-    # ABA 2: MARKET FEELING (As 3 Caixinhas de Resumo Macro)
+    # ABA 2: MARKET FEELING (Com interatividade nas Oportunidades de Trade)
     elif pagina_selecionada == "MARKET FEELING":
         st.title("🌡️ Market Feeling - Termômetro Macro do Mercado")
         st.markdown(f"Visão executiva e agregada do sentimento atual da B3. *Última atualização: {horario_brasilia} (Brasília)*")
         st.divider()
 
-        # Calculando as métricas para as 3 caixinhas
         total_ativos = len(df_display)
-        
-        # 1. Sentimento Geral (Contagem de Tendências)
         tot_bull = len(df_display[df_display['Tendência'].str.contains("Bull")])
         tot_bear = len(df_display[df_display['Tendência'].str.contains("Bear")])
         tot_lateral = len(df_display[df_display['Tendência'].str.contains("Lateral")])
-        
         perc_alta = int((tot_bull / total_ativos) * 100) if total_ativos > 0 else 0
         
-        # 2. Pressão de Volume (Ativos com volume forte >= 3)
         ativos_vol_forte = len(df_display[df_display['Volume_Score'] >= 3])
         perc_volume = int((ativos_vol_forte / total_ativos) * 100) if total_ativos > 0 else 0
 
-        # 3. Oportunidades Ativas (Sinais Long / Short)
         tot_long = len(df_display[df_display['Sinal Final'].str.contains("LONG")])
         tot_short = len(df_display[df_display['Sinal Final'].str.contains("SHORT")])
         tot_neutro = len(df_display[df_display['Sinal Final'].str.contains("NEUTRO")])
 
-        # Exibindo as 3 Caixinhas (Metrics do Streamlit)
+        # As 3 Caixinhas de Resumo Executivo
         col1, col2, col3 = st.columns(3)
 
         with col1:
@@ -277,12 +278,35 @@ def renderizar_painel():
             st.success("Contagem de ativos com alinhamento completo na orquestra prontos para execução.")
 
         st.divider()
-        st.subheader("💡 Resumo Executivo para Tomada de Decisão")
-        if tot_long > tot_short:
-            st.markdown("🟢 **Viés Atual:** O mercado apresenta leve predominância de oportunidades compradoras. Foque nos ativos com volume alto e tendência Bull.")
-        elif tot_short > tot_long:
-            st.markdown("🔴 **Viés Atual:** Pressão vendedora predominante. Atenção aos ativos em Bear Market com expansão de volatilidade.")
+
+        # SEÇÃO INTERATIVA DE OPORTUNIDADES DE TRADE
+        st.subheader("⚡ Filtrar Oportunidades de Trade Ativas")
+        st.markdown("Clique em um dos botões abaixo para abrir e visualizar instantaneamente os ativos recomendados para operação:")
+
+        # Botões de seleção interativa
+        filtro_col1, filtro_col2, filtro_col3 = st.columns(3)
+        
+        # Inicializa o estado da sessão para controle dos botões se necessário, ou usa lógica simples via radio/select
+        opcao_filtro = st.radio(
+            "Selecione o filtro de oportunidades:", 
+            ["Mostrar Todos", "🟢 Oportunidades LONG", "🔴 Oportunidades SHORT"],
+            horizontal=True
+        )
+
+        st.markdown("---")
+
+        # Filtrando o DataFrame com base na escolha do usuário
+        if opcao_filtro == "🟢 Oportunidades LONG":
+            df_filtrado = df_display[df_display['Sinal Final'].str.contains("LONG")]
+            st.subheader(f"🟢 Ativos com Sinal LONG ({len(df_filtrado)})")
+        elif opcao_filtro == "🔴 Oportunidades SHORT":
+            df_filtrado = df_display[df_display['Sinal Final'].str.contains("SHORT")]
+            st.subheader(f"🔴 Ativos com Sinal SHORT ({len(df_filtrado)})")
         else:
-            st.markdown("⚪ **Viés Atual:** Mercado predominantemente travado ou lateral. A recomendação quantitativa é **preservar capital** e aguardar o rompimento dos ranges.")
+            df_filtrado = df_display
+            st.subheader(f"📋 Todos os Ativos Monitorados ({len(df_filtrado)})")
+
+        # Exibe a tabela correspondente ao filtro escolhido
+        exibir_tabela_ativos(df_filtrado)
 
 renderizar_painel()
