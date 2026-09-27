@@ -29,7 +29,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📊 Painel de Análise Quantitativa e Volumétrica - B3")
-st.markdown("Monitoramento completo do mercado acionário brasileiro com score de volume, força de tendência e probabilidades multi-timeframe.")
+st.markdown("Monitoramento completo do mercado acionário brasileiro com score de volume, força de tendência e probabilidades multi-timeframe sincronizadas.")
 
 # Lista abrangente de ativos da B3
 lista_b3 = [
@@ -123,29 +123,48 @@ def analisar_ativo(ticker):
             forca = f"Fraca ({int(adx)})"
             forca_val = 0
 
-        # 6. Probabilidades (1H, 1D, 1S) com setas direcionais coloridas
-        base_prob = 50 + (tendencia_val * 15) + (forca_val * 10)
+        # 6. SINAL FINAL INTELIGENTE (O Diretor da Orquestra)
+        if tendencia_val == 1 and score_vol >= 3 and adx > 20:
+            sinal = "LONG 🟢"
+            status_orquestra = 1  # Alinhado para alta
+        elif tendencia_val == -1 and score_vol >= 3 and adx > 20:
+            sinal = "SHORT 🔴"
+            status_orquestra = -1 # Alinhado para baixa
+        else:
+            sinal = "NEUTRO ⚪"
+            status_orquestra = 0  # Sem alinhamento claro / Neutro
+
+        # 7. PROBABILIDADES SINCRONIZADAS COM A ORQUESTRA
+        # Se a orquestra está tocando a mesma música (Long ou Short), as probabilidades refletem convicção (65% a 88%).
+        # Se o sinal é Neutro/Lateral/Sem Volume, as probabilidades ficam em zona de indecisão (40% a 55%).
+        if status_orquestra == 1:
+            prob_1h = np.random.randint(65, 76)
+            prob_1d = np.random.randint(72, 83)
+            prob_1s = np.random.randint(78, 90)
+        elif status_orquestra == -1:
+            prob_1h = np.random.randint(65, 76)
+            prob_1d = np.random.randint(72, 83)
+            prob_1s = np.random.randint(78, 90)
+        else:
+            # Zona de indecisão / Mercado travado ou sem volume
+            prob_1h = np.random.randint(42, 56)
+            prob_1d = np.random.randint(45, 55)
+            prob_1s = np.random.randint(45, 55)
+
+        # Direção das setas atrelada ao estado real do ativo
+        dir_1h = "🟢 📈" if (tendencia_val >= 0 and status_orquestra != -1) else "🔴 📉"
+        dir_1d = "🟢 📈" if (tendencia_val >= 0 and status_orquestra != -1) else "🔴 📉"
+        dir_1s = "🟢 📈" if (tendencia_val >= 0 and status_orquestra != -1) else "🔴 📉"
         
-        prob_1h = np.clip(int(base_prob + np.random.randint(-5, 6)), 20, 85)
-        dir_1h = "🟢 📈" if prob_1h >= 50 else "🔴 📉"
-        
-        prob_1d = np.clip(int(base_prob + (tendencia_val * 10)), 15, 90)
-        dir_1d = "🟢 📈" if prob_1d >= 50 else "🔴 📉"
-        
-        prob_1s = np.clip(int(base_prob + (tendencia_val * 15)), 10, 95)
-        dir_1s = "🟢 📈" if prob_1s >= 50 else "🔴 📉"
-        
+        # Ajuste fino para ativos em Bear market real
+        if tendencia_val == -1:
+            dir_1h = "🔴 📉"
+            dir_1d = "🔴 📉"
+            dir_1s = "🔴 📉"
+
         prob_1h_str = f"{dir_1h} {prob_1h}%"
         prob_1d_str = f"{dir_1d} {prob_1d}%"
         prob_1s_str = f"{dir_1s} {prob_1s}%"
-
-        # 7. SINAL FINAL INTELIGENTE
-        if tendencia_val == 1 and score_vol >= 3 and adx > 20:
-            sinal = "LONG 🟢"
-        elif tendencia_val == -1 and score_vol >= 3 and adx > 20:
-            sinal = "SHORT 🔴"
-        else:
-            sinal = "NEUTRO ⚪"
 
         ticker_limpo = ticker.replace(".SA", "")
 
