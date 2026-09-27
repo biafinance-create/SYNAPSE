@@ -27,13 +27,13 @@ lista_b3 = [
     "BPAC11.SA", "BPAN4.SA"
 ]
 
-# Dicionário de domínios corporativos para garantir o carregamento perfeito dos logos via Clearbit/Favicon
+# Dicionário de domínios corporativos corrigido
 dominios_empresas = {
     "PETR4": "petrobras.com.br", "VALE3": "vale.com", "ITUB4": "itau.com.br",
     "BBDC4": "bradesco.com.br", "B3SA3": "b3.com.br", "ABEV3": "ambev.com.br",
     "WEGE3": "weg.net", "BBAS3": "bb.com.br", "RENT3": "localiza.com",
     "ITSA4": "itausa.com.br", "SUZB3": "suzano.com.br", "JBSS3": "jbs.com.br",
-    "RADL3":ainsub = "rdsaude.com.br", "EQTL3": "equatorialenergia.com.br",
+    "RADL3": "rdsaude.com.br", "EQTL3": "equatorialenergia.com.br",
     "SANB11": "santander.com.br", "VBBR3": "vibraenergia.com.br", "GGBR4": "gerdau.com",
     "CSAN3": "cosan.com.br", "HAPV3": "hapvida.com.br", "RAIL3": "rumolog.com",
     "PRIO3": "prio3.com.br", "ENEV3": "eneva.com.br", "CCRO3": "grupoccr.com.br",
@@ -149,7 +149,6 @@ def analisar_ativo(ticker):
         
         # Buscando o logo corporativo oficial baseado no domínio da empresa
         dominio = dominios_empresas.get(ticker_limpo, "google.com")
-        logo_url = f"https://img.logo.dev/{dominio}?token=pk_free" # ou usando o clearbit padrão abaixo:
         logo_url = f"https://logo.clearbit.com/{dominio}"
 
         return {
