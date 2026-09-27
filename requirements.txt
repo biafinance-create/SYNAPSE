@@ -1,9 +1,4 @@
 streamlit
 pandas
 numpy
-plotly
-ta
-scikit-learn
 yfinance
-matplotlib
-streamlit-lightweight-charts
