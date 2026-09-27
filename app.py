@@ -27,26 +27,6 @@ lista_b3 = [
     "BPAC11.SA", "BPAN4.SA"
 ]
 
-dominios_empresas = {
-    "PETR4": "petrobras.com.br", "VALE3": "vale.com", "ITUB4": "itau.com.br",
-    "BBDC4": "bradesco.com.br", "B3SA3": "b3.com.br", "ABEV3": "ambev.com.br",
-    "WEGE3": "weg.net", "BBAS3": "bb.com.br", "RENT3": "localiza.com",
-    "ITSA4": "itausa.com.br", "SUZB3": "suzano.com.br", "JBSS3": "jbs.com.br",
-    "RADL3": "rdsaude.com.br", "EQTL3": "equatorialenergia.com.br",
-    "SANB11": "santander.com.br", "VBBR3": "vibraenergia.com.br", "GGBR4": "gerdau.com",
-    "CSAN3": "cosan.com.br", "HAPV3": "hapvida.com.br", "RAIL3": "rumolog.com",
-    "PRIO3": "prio3.com.br", "ENEV3": "eneva.com.br", "CCRO3": "grupoccr.com.br",
-    "BRFS3": "brf-global.com", "ASAI3": "assai.com.br", "KLBN11": "klabin.com.br",
-    "TIMS3": "tim.com.br", "EGIE3": "engie.com.br", "EMBR3": "embraer.com",
-    "AZUL4": "voeazul.com.br", "MGLU3": "magazineluiza.com.br", "SMTO3": "saomartinho.com.br",
-    "MULT3": "multoplan.com.br", "UGPA3": "ultra.com.br", "CYRE3": "cyrela.com.br",
-    "EZTC3": "eztc.com.br", "MRVE3": "mrv.com.br", "RECV3": "petrorecôncavo.com.br",
-    "SLCE3": "slcagricola.com.br", "AGRO3": "brasilagro.com.br", "TOTS3": "totvs.com",
-    "CXSE3": "caixaseguridade.com.br", "BBSE3": "bbseguridade.com.br", "CMIG4": "cemig.com.br",
-    "CPLE6": "copel.com", "ELET3": "eletrobras.com", "ELET6": "eletrobras.com",
-    "SANB4": "santander.com.br", "BPAC11": "btgpactual.com", "BPAN4": "bancoopan.com"
-}
-
 @st.cache_data(ttl=1800)
 def analisar_ativo(ticker):
     try:
@@ -100,7 +80,7 @@ def analisar_ativo(ticker):
         variacao_preco = df['Close'].iloc[-1] - df['Close'].iloc[-2]
         vol_positivo = "🟢" if variacao_preco >= 0 else "🔴"
 
-        # 4. Tendência atual
+        # 4. Tendência atual (Baseada em Médias Móveis)
         close_atual = df['Close'].iloc[-1]
         ema9_atual = df['EMA9'].iloc[-1]
         ema21_atual = df['EMA21'].iloc[-1]
@@ -115,7 +95,7 @@ def analisar_ativo(ticker):
             tendencia = "Lateral 🦀"
             tendencia_val = 0
 
-        # 5. Força do Mercado
+        # 5. Força do Mercado (ADX)
         if adx > 25:
             forca = f"Forte ({int(adx)})"
             forca_val = 1
@@ -136,20 +116,19 @@ def analisar_ativo(ticker):
         prob_1d_str = f"📈 {prob_1d}%" if tendencia_val >= 0 else f"📉 {100-prob_1d}%"
         prob_1s_str = f"📈 {prob_1s}%" if tendencia_val >= 0 else f"📉 {100-prob_1s}%"
 
-        # 7. Sinal Final
+        # 7. SINAL FINAL INTELIGENTE (Cruzando Tendência das Médias + Score de Volume + Força ADX)
+        # LONG: Tendência Bull + Volume saudável (>=3) + ADX indicando tendência ativa (>20)
         if tendencia_val == 1 and score_vol >= 3 and adx > 20:
             sinal = "LONG 🟢"
+        # SHORT: Tendência Bear + Volume saudável (>=3) + ADX indicando tendência ativa (>20)
         elif tendencia_val == -1 and score_vol >= 3 and adx > 20:
             sinal = "SHORT 🔴"
         else:
             sinal = "NEUTRO ⚪"
 
         ticker_limpo = ticker.replace(".SA", "")
-        dominio = dominios_empresas.get(ticker_limpo, "google.com")
-        logo_url = f"https://logo.clearbit.com/{dominio}"
 
         return {
-            "Logo_URL": logo_url,
             "Ticker": ticker_limpo,
             "Volume (1-5)": f"{score_vol}/5 {vol_positivo}",
             "Tendência": tendencia,
@@ -186,7 +165,6 @@ def renderizar_painel():
             cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
             
             with cols[0]:
-                # Script inteligente: tenta carregar a imagem, se falhar (onerror), esconde a img e mostra um avatar com a letra inicial estilizada
                 st.markdown(
                     f"""
                     <div style="display: flex; align-items: center; gap: 10px;">
