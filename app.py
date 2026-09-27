@@ -12,24 +12,19 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilização CSS para fixar o cabeçalho e criar a rolagem interna apenas nos ativos
+# Estilização CSS para o cabeçalho ficar fixo na janela inteira da página
 st.markdown("""
     <style>
-        /* Fixa a barra de cabeçalho da tabela no topo da área de rolagem */
+        /* Torna o cabeçalho fixo no topo da página inteira ao rolar */
         .fixed-header {
             position: sticky;
-            top: 0;
-            background-color: #0e1117; /* Cor de fundo padrão do Streamlit escuro */
+            top: 45px; /* Distância do topo da página do Streamlit */
+            background-color: #0e1117;
             z-index: 999;
-            padding-bottom: 10px;
+            padding-top: 15px;
+            padding-bottom: 15px;
             border-bottom: 2px solid #30363d;
-        }
-        /* Caixa com scroll para a lista de ativos */
-        .scrollable-container {
-            max-height: 550px;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding-right: 10px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
         }
     </style>
 """, unsafe_allow_html=True)
@@ -177,7 +172,7 @@ def renderizar_painel():
 
         st.subheader("Painel Geral de Oportunidades")
         
-        # CABEÇALHO FIXO USANDO A CLASSE CSS
+        # CABEÇALHO FIXO NA TELA INTEIRA AO ROLAR
         st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
         header_cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
         headers = ["Ticker", "Volume (1-5)", "Tendência", "Força", "Prob 1H", "Prob 1D", "Prob 1S", "Sinal Final"]
@@ -185,9 +180,7 @@ def renderizar_painel():
             col.markdown(f"**{h}**")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # CONTAINER COM SCROLL INTERNO APENAS PARA OS ATIVOS
-        st.markdown('<div class="scrollable-container">', unsafe_allow_html=True)
-        
+        # LISTA DE ATIVOS QUE ROLAM LIVREMENTE POR BAIXO DO CABEÇALHO
         for idx, row in df_display.iterrows():
             cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
             
@@ -219,9 +212,7 @@ def renderizar_painel():
                 st.markdown(f"**{row['Sinal Final']}**")
             
             st.divider()
-            
-        st.markdown('</div>', unsafe_allow_html=True) # Fim do container com scroll
     else:
-        st.error("Não foi possível carregar os dados dos ativos.")
+        st.error("Não foi possível carregar los dados dos ativos.")
 
 renderizar_painel()
