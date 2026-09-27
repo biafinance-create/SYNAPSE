@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from datetime import datetime
+from zoneinfo import ZoneInfo  # Módulo nativo do Python para fuso horário
 
 # Configuração da página do Streamlit (Layout Wide)
 st.set_page_config(
@@ -116,11 +117,9 @@ def analisar_ativo(ticker):
         prob_1d_str = f"📈 {prob_1d}%" if tendencia_val >= 0 else f"📉 {100-prob_1d}%"
         prob_1s_str = f"📈 {prob_1s}%" if tendencia_val >= 0 else f"📉 {100-prob_1s}%"
 
-        # 7. SINAL FINAL INTELIGENTE (Cruzando Tendência das Médias + Score de Volume + Força ADX)
-        # LONG: Tendência Bull + Volume saudável (>=3) + ADX indicando tendência ativa (>20)
+        # 7. SINAL FINAL INTELIGENTE
         if tendencia_val == 1 and score_vol >= 3 and adx > 20:
             sinal = "LONG 🟢"
-        # SHORT: Tendência Bear + Volume saudável (>=3) + ADX indicando tendência ativa (>20)
         elif tendencia_val == -1 and score_vol >= 3 and adx > 20:
             sinal = "SHORT 🔴"
         else:
@@ -141,10 +140,12 @@ def analisar_ativo(ticker):
     except Exception as e:
         return None
 
-# Fragmento com atualização automática a cada 1 hora
+# Fragmento com atualização automática a cada 1 hora e fuso horário do Brasil ajustado
 @st.fragment(run_every="3600s")
 def renderizar_painel():
-    st.caption(f"🔄 Última atualização automática: {datetime.now().strftime('%H:%M:%S')}")
+    # Obtendo a hora atual sincronizada com o fuso de Brasília
+    horario_brasilia = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime('%H:%M:%S')
+    st.caption(f"🔄 Última atualização automática (Horário de Brasília): {horario_brasilia}")
     
     with st.spinner("Analisando ativos da B3 em lote..."):
         dados_tabela = [analisar_ativo(t) for t in lista_b3]
