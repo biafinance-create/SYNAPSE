@@ -27,7 +27,6 @@ lista_b3 = [
     "BPAC11.SA", "BPAN4.SA"
 ]
 
-# Dicionário de domínios corporativos corrigido
 dominios_empresas = {
     "PETR4": "petrobras.com.br", "VALE3": "vale.com", "ITUB4": "itau.com.br",
     "BBDC4": "bradesco.com.br", "B3SA3": "b3.com.br", "ABEV3": "ambev.com.br",
@@ -146,8 +145,6 @@ def analisar_ativo(ticker):
             sinal = "NEUTRO ⚪"
 
         ticker_limpo = ticker.replace(".SA", "")
-        
-        # Buscando o logo corporativo oficial baseado no domínio da empresa
         dominio = dominios_empresas.get(ticker_limpo, "google.com")
         logo_url = f"https://logo.clearbit.com/{dominio}"
 
@@ -179,23 +176,24 @@ def renderizar_painel():
 
         st.subheader("Painel Geral de Oportunidades")
         
-        # Cabeçalho da tabela customizada em colunas HTML/Markdown
         header_cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
         headers = ["Ticker", "Volume (1-5)", "Tendência", "Força", "Prob 1H", "Prob 1D", "Prob 1S", "Sinal Final"]
         for col, h in zip(header_cols, headers):
             col.markdown(f"**{h}**")
         st.divider()
 
-        # Renderização linha por linha unindo Logo + Ticker na mesma célula
         for idx, row in df_display.iterrows():
             cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
             
             with cols[0]:
+                # Script inteligente: tenta carregar a imagem, se falhar (onerror), esconde a img e mostra um avatar com a letra inicial estilizada
                 st.markdown(
                     f"""
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <img src="{row['Logo_URL']}" width="22" height="22" style="border-radius: 50%; object-fit: contain; background: white;" onerror="this.style.display='none'">
-                        <span style="font-weight: bold; font-size: 15px;">{row['Ticker']}</span>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 28px; height: 28px; border-radius: 50%; background: #1e293b; color: #38bdf8; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 1px solid #334155; flex-shrink: 0;">
+                            {row['Ticker'][:2]}
+                        </div>
+                        <span style="font-weight: bold; font-size: 15px; color: #f8fafc;">{row['Ticker']}</span>
                     </div>
                     """, 
                     unsafe_allow_html=True
@@ -219,5 +217,4 @@ def renderizar_painel():
     else:
         st.error("Não foi possível carregar os dados dos ativos.")
 
-# Executa o painel
 renderizar_painel()
