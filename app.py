@@ -27,6 +27,27 @@ lista_b3 = [
     "BPAC11.SA", "BPAN4.SA"
 ]
 
+# Dicionário de domínios corporativos para garantir o carregamento perfeito dos logos via Clearbit/Favicon
+dominios_empresas = {
+    "PETR4": "petrobras.com.br", "VALE3": "vale.com", "ITUB4": "itau.com.br",
+    "BBDC4": "bradesco.com.br", "B3SA3": "b3.com.br", "ABEV3": "ambev.com.br",
+    "WEGE3": "weg.net", "BBAS3": "bb.com.br", "RENT3": "localiza.com",
+    "ITSA4": "itausa.com.br", "SUZB3": "suzano.com.br", "JBSS3": "jbs.com.br",
+    "RADL3":ainsub = "rdsaude.com.br", "EQTL3": "equatorialenergia.com.br",
+    "SANB11": "santander.com.br", "VBBR3": "vibraenergia.com.br", "GGBR4": "gerdau.com",
+    "CSAN3": "cosan.com.br", "HAPV3": "hapvida.com.br", "RAIL3": "rumolog.com",
+    "PRIO3": "prio3.com.br", "ENEV3": "eneva.com.br", "CCRO3": "grupoccr.com.br",
+    "BRFS3": "brf-global.com", "ASAI3": "assai.com.br", "KLBN11": "klabin.com.br",
+    "TIMS3": "tim.com.br", "EGIE3": "engie.com.br", "EMBR3": "embraer.com",
+    "AZUL4": "voeazul.com.br", "MGLU3": "magazineluiza.com.br", "SMTO3": "saomartinho.com.br",
+    "MULT3": "multoplan.com.br", "UGPA3": "ultra.com.br", "CYRE3": "cyrela.com.br",
+    "EZTC3": "eztc.com.br", "MRVE3": "mrv.com.br", "RECV3": "petrorecôncavo.com.br",
+    "SLCE3": "slcagricola.com.br", "AGRO3": "brasilagro.com.br", "TOTS3": "totvs.com",
+    "CXSE3": "caixaseguridade.com.br", "BBSE3": "bbseguridade.com.br", "CMIG4": "cemig.com.br",
+    "CPLE6": "copel.com", "ELET3": "eletrobras.com", "ELET6": "eletrobras.com",
+    "SANB4": "santander.com.br", "BPAC11": "btgpactual.com", "BPAN4": "bancoopan.com"
+}
+
 @st.cache_data(ttl=1800)
 def analisar_ativo(ticker):
     try:
@@ -125,7 +146,11 @@ def analisar_ativo(ticker):
             sinal = "NEUTRO ⚪"
 
         ticker_limpo = ticker.replace(".SA", "")
-        logo_url = f"https://s3-symbol-logo.tradingview.com/br/b3--{ticker_limpo.lower()}.svg"
+        
+        # Buscando o logo corporativo oficial baseado no domínio da empresa
+        dominio = dominios_empresas.get(ticker_limpo, "google.com")
+        logo_url = f"https://img.logo.dev/{dominio}?token=pk_free" # ou usando o clearbit padrão abaixo:
+        logo_url = f"https://logo.clearbit.com/{dominio}"
 
         return {
             "Logo_URL": logo_url,
@@ -167,12 +192,11 @@ def renderizar_painel():
             cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
             
             with cols[0]:
-                # HTML combinando a imagem do logo minúscula ao lado do nome do Ticker
                 st.markdown(
                     f"""
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <img src="{row['Logo_URL']}" width="24" height="24" style="border-radius: 4px; background: white; padding: 2px;" onerror="this.style.display='none'">
-                        <span style="font-weight: bold; font-size: 16px;">{row['Ticker']}</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <img src="{row['Logo_URL']}" width="22" height="22" style="border-radius: 50%; object-fit: contain; background: white;" onerror="this.style.display='none'">
+                        <span style="font-weight: bold; font-size: 15px;">{row['Ticker']}</span>
                     </div>
                     """, 
                     unsafe_allow_html=True
