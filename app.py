@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from datetime import datetime
-from zoneinfo import ZoneInfo  # Módulo nativo do Python para fuso horário
+from zoneinfo import ZoneInfo
 
 # Configuração da página do Streamlit (Layout Wide)
 st.set_page_config(
@@ -11,6 +11,28 @@ st.set_page_config(
     page_icon="📈",
     layout="wide"
 )
+
+# Estilização CSS para fixar o cabeçalho e criar a rolagem interna apenas nos ativos
+st.markdown("""
+    <style>
+        /* Fixa a barra de cabeçalho da tabela no topo da área de rolagem */
+        .fixed-header {
+            position: sticky;
+            top: 0;
+            background-color: #0e1117; /* Cor de fundo padrão do Streamlit escuro */
+            z-index: 999;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #30363d;
+        }
+        /* Caixa com scroll para a lista de ativos */
+        .scrollable-container {
+            max-height: 550px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 10px;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 st.title("📊 Painel de Análise Quantitativa e Volumétrica - B3")
 st.markdown("Monitoramento completo do mercado acionário brasileiro com score de volume, força de tendência e probabilidades multi-timeframe.")
@@ -81,7 +103,7 @@ def analisar_ativo(ticker):
         variacao_preco = df['Close'].iloc[-1] - df['Close'].iloc[-2]
         vol_positivo = "🟢" if variacao_preco >= 0 else "🔴"
 
-        # 4. Tendência atual (Baseada em Médias Móveis)
+        # 4. Tendência atual
         close_atual = df['Close'].iloc[-1]
         ema9_atual = df['EMA9'].iloc[-1]
         ema21_atual = df['EMA21'].iloc[-1]
@@ -140,10 +162,9 @@ def analisar_ativo(ticker):
     except Exception as e:
         return None
 
-# Fragmento com atualização automática a cada 1 hora e fuso horário do Brasil ajustado
+# Fragmento com atualização automática a cada 1 hora
 @st.fragment(run_every="3600s")
 def renderizar_painel():
-    # Obtendo a hora atual sincronizada com o fuso de Brasília
     horario_brasilia = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime('%H:%M:%S')
     st.caption(f"🔄 Última atualização automática (Horário de Brasília): {horario_brasilia}")
     
@@ -156,19 +177,24 @@ def renderizar_painel():
 
         st.subheader("Painel Geral de Oportunidades")
         
+        # CABEÇALHO FIXO USANDO A CLASSE CSS
+        st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
         header_cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
         headers = ["Ticker", "Volume (1-5)", "Tendência", "Força", "Prob 1H", "Prob 1D", "Prob 1S", "Sinal Final"]
         for col, h in zip(header_cols, headers):
             col.markdown(f"**{h}**")
-        st.divider()
+        st.markdown('</div>', unsafe_allow_html=True)
 
+        # CONTAINER COM SCROLL INTERNO APENAS PARA OS ATIVOS
+        st.markdown('<div class="scrollable-container">', unsafe_allow_html=True)
+        
         for idx, row in df_display.iterrows():
             cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
             
             with cols[0]:
                 st.markdown(
                     f"""
-                    <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 0;">
                         <div style="width: 28px; height: 28px; border-radius: 50%; background: #1e293b; color: #38bdf8; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 1px solid #334155; flex-shrink: 0;">
                             {row['Ticker'][:2]}
                         </div>
@@ -193,6 +219,8 @@ def renderizar_painel():
                 st.markdown(f"**{row['Sinal Final']}**")
             
             st.divider()
+            
+        st.markdown('</div>', unsafe_allow_html=True) # Fim do container com scroll
     else:
         st.error("Não foi possível carregar os dados dos ativos.")
 
