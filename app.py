@@ -14,7 +14,7 @@ st.set_page_config(
 st.title("📊 Painel de Análise Quantitativa e Volumétrica - B3")
 st.markdown("Monitoramento completo do mercado acionário brasileiro com score de volume, força de tendência e probabilidades multi-timeframe.")
 
-# Lista abrangente de ativos da B3 (Principais ações do Ibovespa e alta liquidez)
+# Lista abrangente de ativos da B3
 lista_b3 = [
     "PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA", "B3SA3.SA", "ABEV3.SA", 
     "WEGE3.SA", "BBAS3.SA", "RENT3.SA", "ITSA4.SA", "SUZB3.SA", "JBSS3.SA", 
@@ -27,7 +27,6 @@ lista_b3 = [
     "BPAC11.SA", "BPAN4.SA"
 ]
 
-# Função para calcular os indicadores técnicos e o score de volume de cada ativo
 @st.cache_data(ttl=1800)
 def analisar_ativo(ticker):
     try:
@@ -129,7 +128,7 @@ def analisar_ativo(ticker):
         logo_url = f"https://s3-symbol-logo.tradingview.com/br/b3--{ticker_limpo.lower()}.svg"
 
         return {
-            "Logo": logo_url,
+            "Logo_URL": logo_url,
             "Ticker": ticker_limpo,
             "Volume (1-5)": f"{score_vol}/5 {vol_positivo}",
             "Tendência": tendencia,
@@ -142,12 +141,12 @@ def analisar_ativo(ticker):
     except Exception as e:
         return None
 
-# Definindo o fragmento com atualização automática a cada 1 hora (3600 segundos)
+# Fragmento com atualização automática a cada 1 hora
 @st.fragment(run_every="3600s")
 def renderizar_painel():
     st.caption(f"🔄 Última atualização automática: {datetime.now().strftime('%H:%M:%S')}")
     
-    with st.spinner("Analisando ativos da B3 em lote... Isso pode levar alguns segundos na primeira carga."):
+    with st.spinner("Analisando ativos da B3 em lote..."):
         dados_tabela = [analisar_ativo(t) for t in lista_b3]
         dados_tabela = [d for d in dados_tabela if d is not None]
 
@@ -156,21 +155,44 @@ def renderizar_painel():
 
         st.subheader("Painel Geral de Oportunidades")
         
-        # Configuração avançada de colunas para renderizar os logos de forma nativa e bonita na tabela
-        st.dataframe(
-            df_display,
-            column_config={
-                "Logo": st.column_config.ImageColumn(
-                    "Logo", help="Logotipo da empresa", width="small"
-                ),
-                "Ticker": st.column_config.TextColumn(
-                    "Ticker", width="medium"
+        # Cabeçalho da tabela customizada em colunas HTML/Markdown
+        header_cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
+        headers = ["Ticker", "Volume (1-5)", "Tendência", "Força", "Prob 1H", "Prob 1D", "Prob 1S", "Sinal Final"]
+        for col, h in zip(header_cols, headers):
+            col.markdown(f"**{h}**")
+        st.divider()
+
+        # Renderização linha por linha unindo Logo + Ticker na mesma célula
+        for idx, row in df_display.iterrows():
+            cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
+            
+            with cols[0]:
+                # HTML combinando a imagem do logo minúscula ao lado do nome do Ticker
+                st.markdown(
+                    f"""
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <img src="{row['Logo_URL']}" width="24" height="24" style="border-radius: 4px; background: white; padding: 2px;" onerror="this.style.display='none'">
+                        <span style="font-weight: bold; font-size: 16px;">{row['Ticker']}</span>
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
                 )
-            },
-            use_container_width=True,
-            hide_index=True,
-            height=600
-        )
+            with cols[1]:
+                st.markdown(row['Volume (1-5)'])
+            with cols[2]:
+                st.markdown(row['Tendência'])
+            with cols[3]:
+                st.markdown(row['Força'])
+            with cols[4]:
+                st.markdown(row['Prob 1H'])
+            with cols[5]:
+                st.markdown(row['Prob 1D'])
+            with cols[6]:
+                st.markdown(row['Prob 1S'])
+            with cols[7]:
+                st.markdown(f"**{row['Sinal Final']}**")
+            
+            st.divider()
     else:
         st.error("Não foi possível carregar os dados dos ativos.")
 
