@@ -4,7 +4,7 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime
 
-# Configuração da página do Streamlit (Layout Wide para aproveitar a tela toda)
+# Configuração da página do Streamlit (Layout Wide)
 st.set_page_config(
     page_title="Dashboard de Análise de Ações - Synapse",
     page_icon="📈",
@@ -21,10 +21,10 @@ lista_b3 = [
     "RADL3.SA", "EQTL3.SA", "SANB11.SA", "VBBR3.SA", "GGBR4.SA", "CSAN3.SA", 
     "HAPV3.SA", "RAIL3.SA", "PRIO3.SA", "ENEV3.SA", "CCRO3.SA", "BRFS3.SA", 
     "ASAI3.SA", "KLBN11.SA", "TIMS3.SA", "EGIE3.SA", "EMBR3.SA", "AZUL4.SA", 
-    "MGLU3.SA", "VIIA3.SA", "CVCB3.SA", "IRBR3.SA", "AZIN3.SA", "SMTO3.SA", 
-    "MULT3.SA", "UGPA3.SA", "CYRE3.SA", "EZTC3.SA", "MRVE3.SA", "RECV3.SA",
-    "SLCE3.SA", "AGRO3.SA", "TOTS3.SA", "CXSE3.SA", "BBSE3.SA", "CMIG4.SA", 
-    "CPLE6.SA", "ELET3.SA", "ELET6.SA", "SANB4.SA", "BPAC11.SA", "BPAN4.SA"
+    "MGLU3.SA", "SMTO3.SA", "MULT3.SA", "UGPA3.SA", "CYRE3.SA", "EZTC3.SA", 
+    "MRVE3.SA", "RECV3.SA", "SLCE3.SA", "AGRO3.SA", "TOTS3.SA", "CXSE3.SA", 
+    "BBSE3.SA", "CMIG4.SA", "CPLE6.SA", "ELET3.SA", "ELET6.SA", "SANB4.SA", 
+    "BPAC11.SA", "BPAN4.SA"
 ]
 
 # Função para calcular os indicadores técnicos e o score de volume de cada ativo
@@ -126,8 +126,10 @@ def analisar_ativo(ticker):
             sinal = "NEUTRO ⚪"
 
         ticker_limpo = ticker.replace(".SA", "")
+        logo_url = f"https://s3-symbol-logo.tradingview.com/br/b3--{ticker_limpo.lower()}.svg"
 
         return {
+            "Logo": logo_url,
             "Ticker": ticker_limpo,
             "Volume (1-5)": f"{score_vol}/5 {vol_positivo}",
             "Tendência": tendencia,
@@ -154,9 +156,17 @@ def renderizar_painel():
 
         st.subheader("Painel Geral de Oportunidades")
         
-        # Exibição otimizada em tabela nativa do Streamlit (com largura total e interativa)
+        # Configuração avançada de colunas para renderizar os logos de forma nativa e bonita na tabela
         st.dataframe(
             df_display,
+            column_config={
+                "Logo": st.column_config.ImageColumn(
+                    "Logo", help="Logotipo da empresa", width="small"
+                ),
+                "Ticker": st.column_config.TextColumn(
+                    "Ticker", width="medium"
+                )
+            },
             use_container_width=True,
             hide_index=True,
             height=600
