@@ -271,7 +271,7 @@ def renderizar_painel():
 
         exibir_tabela_ativos(df_filtrado)
 
-    # ABA 3: OPTIONS SCANNER
+    # ABA 3: OPTIONS SCANNER (Com Atalho Inteligente para o Opcoes.net.br)
     elif pagina_selecionada == "OPTIONS SCANNER":
         st.title("🎯 Options Scanner - Autofiltragem de Calls e Puts")
         st.markdown("Analise a cadeia de opções de qualquer ativo da B3 com filtros automáticos de Moneyness, Liquidez e Vencimento.")
@@ -282,14 +282,21 @@ def renderizar_painel():
 
         if ativo_escolhido:
             preco_ativo = df_display.loc[df_display['Ticker'] == ativo_escolhido, 'Preco_Atual'].values[0]
-            st.markdown(f"💵 **Preço Atual de {ativo_escolhido}:** R$ {preco_ativo:.2f}")
+            
+            # Exibe o preço e um link direto para a grade do opcoes.net.br como redundância profissional
+            col_info1, col_info2 = st.columns([2, 1])
+            with col_info1:
+                st.markdown(f"💵 **Preço Atual de {ativo_escolhido}:** R$ {preco_ativo:.2f}")
+            with col_info2:
+                url_opcoes_net = f"https://www.opcoes.net.br/opcoes/bovespa/{ativo_escolhido.lower()}"
+                st.markdown(f"🔗 [Abrir grade no Opcoes.net.br]({url_opcoes_net})", unsafe_allow_html=True)
 
             try:
-                ticker_yf = yf.Ticker(f"{ativo_escolhido}.SA")
-                vencimentos = ticker_yf.options
+                ticker_obj = yf.Ticker(f"{ativo_escolhido}.SA")
+                vencimentos = ticker_obj.options
 
-                if not vencimentos:
-                    st.warning(f"Não foram encontradas opções disponíveis para {ativo_escolhido} no momento.")
+                if not vencimentos or len(vencimentos) == 0:
+                    st.warning(f"⚠️ O Yahoo Finance está sem feed de opções para {ativo_escolhido} no momento. Utilize o link ao lado para consultar a grade completa diretamente no Opcoes.net.br.")
                 else:
                     col_f1, col_f2, col_f3 = st.columns(3)
                     
@@ -300,7 +307,7 @@ def renderizar_painel():
                     with col_f3:
                         moneyness_filtro = st.selectbox("Classificação (Moneyness):", ["TODOS", "ATM (No Dinheiro)", "ITM (Dentro do Dinheiro)", "OTM (Fora do Dinheiro)"])
 
-                    cadeia = ticker_yf.option_chain(vencimento_escolhido)
+                    cadeia = ticker_obj.option_chain(vencimento_escolhido)
                     tabela_opcoes = cadeia.calls if tipo_opcao == "CALL" else cadeia.puts
 
                     if not tabela_opcoes.empty:
