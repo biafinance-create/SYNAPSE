@@ -337,13 +337,12 @@ def renderizar_painel():
                      * A diferença de R$ 0,02 é o **Spread**. *Regra de ouro:* Evite opções com spreads gigantescos (ex: Bid a R$ 0,50 e Ask a R$ 0,90), pois você perde dinheiro só de entrar e sair! Procure contratos onde Bid e Ask estejam bem coladinhos e com bom **Volume** e **Open Interest**.
                 """)
 
-    # ABA 4: BACKTESTING (Novo Motor Quantitativo de Simulação Histórica)
+    # ABA 4: BACKTESTING
     elif pagina_selecionada == "BACKTESTING":
         st.title("📊 Backtesting & Validação Estatística da Estratégia")
         st.markdown("Simule o desempenho histórico da nossa 'orquestra' de sinais nos últimos meses e avalie a robustez estatística do setup.")
         st.divider()
 
-        # Controles de Parâmetros do Backtest
         col_bt1, col_bt2, col_bt3 = st.columns(3)
         with col_bt1:
             ativo_bt = st.selectbox("Ativo para Simulação:", df_display['Ticker'].tolist())
@@ -355,7 +354,6 @@ def renderizar_painel():
 
         if st.button("🚀 Rodar Backtesting", type="primary"):
             with st.spinner(f"Executando simulação matemática para {ativo_bt} ({periodo_bt})..."):
-                # Mapeia o período para o yfinance
                 map_periodo = {"6 meses": "6mo", "1 ano": "1y", "2 anos": "2y"}
                 df_hist = yf.download(f"{ativo_bt}.SA", period=map_periodo[periodo_bt], interval="1d", progress=False)
                 
@@ -367,7 +365,6 @@ def renderizar_painel():
                 if len(df_hist) < 50:
                     st.warning("Dados insuficientes para rodar o backtest neste período.")
                 else:
-                    # Aplicando os indicadores históricos
                     df_hist['EMA9'] = df_hist['Close'].ewm(span=9, adjust=False).mean()
                     df_hist['EMA21'] = df_hist['Close'].ewm(span=21, adjust=False).mean()
                     df_hist['MA20'] = df_hist['Close'].rolling(20).mean()
@@ -378,18 +375,14 @@ def renderizar_painel():
                     exp12 = df_hist['Close'].ewm(span=12, adjust=False).mean()
                     exp26 = df_hist['Close'].ewm(span=26, adjust=False).mean()
                     df_hist['MACD_Hist'] = (exp12 - exp26) - (exp12 - exp26).ewm(span=9, adjust=False).mean()
-                    
-                    # Volume rolling percentil
                     df_hist['Vol_Medio'] = df_hist['Volume'].rolling(30).mean()
 
-                    # Motor de Simulação de Trades
                     trades = []
                     capital_inicial = 10000.0
                     capital_atual = capital_inicial
                     curva_capital = [capital_inicial]
 
-                    # Percorre o histórico simulando as entradas
-                    for i in-range(35, len(df_hist) - 10):
+                    for i in range(35, len(df_hist) - 10):
                         close_p = df_hist['Close'].iloc[i]
                         ema9_p = df_hist['EMA9'].iloc[i]
                         ema21_p = df_hist['EMA21'].iloc[i]
@@ -399,19 +392,16 @@ def renderizar_painel():
                         banda_sup_p = df_hist['Banda_Sup'].iloc[i]
                         banda_inf_p = df_hist['Banda_Inf'].iloc[i]
 
-                        # Condições da Orquestra Histórica
                         tendencia_alta = close_p > ema9_p and ema9_p > ema21_p
                         vol_forte = vol_p >= vol_med_p
                         momentum_alta = macd_p > 0
                         expansao_bollinger = (banda_sup_p - banda_inf_p) / df_hist['MA20'].iloc[i] >= 0.04
 
-                        # Sinal LONG Histórico
                         if tendencia_alta and vol_forte and momentum_alta and expansao_bollinger:
-                            preco_entrada = df_hist['Open'].iloc[i+1] # Entra no dia seguinte na abertura
+                            preco_entrada = df_hist['Open'].iloc[i+1]
                             preco_alvo = preco_entrada * (1 + (alvo_gain_pct / 100))
                             preco_stop = preco_entrada * (1 - (stop_loss_pct / 100))
 
-                            # Simula o desfecho do trade nos dias seguintes
                             resultado_trade = "GAIN"
                             retorno_pct = alvo_gain_pct
                             for j in range(i+1, min(i+15, len(df_hist))):
@@ -440,7 +430,6 @@ def renderizar_painel():
                                 "Retorno (%)": retorno_pct
                             })
 
-                    # Métricas Estatísticas do Backtest
                     df_trades = pd.DataFrame(trades)
                     
                     if not df_trades.empty:
@@ -452,10 +441,8 @@ def renderizar_painel():
                         lucro_bruto_total = df_trades[df_trades['Retorno (%)'] > 0]['Retorno (%)'].sum()
                         prejuizo_bruto_total = abs(df_trades[df_trades['Retorno (%)'] < 0]['Retorno (%)'].sum())
                         
-                        # Fator de Lucro (Profit Factor)
                         profit_factor = (lucro_bruto_total / prejuizo_bruto_total) if prejuizo_bruto_total > 0 else 99.0
                         
-                        # Expectativa Matemática por operação
                         media_gain = df_trades[df_trades['Retorno (%)'] > 0]['Retorno (%)'].mean() if vitorias > 0 else 0
                         media_loss = abs(df_trades[df_trades['Retorno (%)'] < 0]['Retorno (%)'].mean()) if derrotas > 0 else 0
                         
@@ -463,7 +450,6 @@ def renderizar_painel():
                         prob_loss = derrotas / total_trades
                         expectativa_matematica = (prob_gain * media_gain) - (prob_loss * media_loss)
 
-                        # Exibindo os Resultados em Métricas Executivas
                         st.subheader(f"📈 Relatório de Desempenho — {ativo_bt}")
                         
                         m1, m2, m3, m4 = st.columns(4)
@@ -474,11 +460,9 @@ def renderizar_painel():
 
                         st.divider()
 
-                        # Gráfico da Curva de Capital (Equity Curve)
                         st.subheader("📉 Curva de Capital Acumulado (Equity Curve)")
                         st.line_chart(curva_capital)
 
-                        # Tabela de Histórico de Trades
                         with st.expander("📋 Ver Log Detalhado das Operações Simuladas"):
                             st.dataframe(df_trades, use_container_width=True, hide_index=True)
                     else:
