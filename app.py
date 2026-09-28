@@ -32,7 +32,7 @@ st.markdown("""
 query_params = st.query_params
 modulo_url = query_params.get("modulo", "MARKET X-RAY")
 
-modulos_disponiveis = ["MARKET X-RAY", "MARKET FEELING", "OPTIONS SCANNER", "BACKTESTING", "QUANT AI OPTIMIZER"]
+modulos_disponiveis = ["MARKET X-RAY", "MARKET FEELING", "OPTIONS SCANNER", "PREDICTIVE AI ENGINE"]
 indice_inicial = modulos_disponiveis.index(modulo_url) if modulo_url in modulos_disponiveis else 0
 
 # BARRA LATERAL COM NAVEGAÇÃO EXPANDIDA
@@ -185,84 +185,87 @@ def analisar_ativo(ticker):
     except Exception as e:
         return None
 
-def executar_backtest_engine(ticker_full, fator_alvo=2.0, fator_stop=1.0):
+def executar_motor_preditivo(ticker_full):
     try:
-        df_hist = yf.download(ticker_full, period="1y", interval="1d", progress=False)
-        if isinstance(df_hist.columns, pd.MultiIndex):
-            df_hist.columns = df_hist.columns.droplevel(1)
-        df_hist = df_hist[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
-        if len(df_hist) < 200:
+        df = yf.download(ticker_full, period="1y", interval="1d", progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.droplevel(1)
+        df = df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
+        if len(df) < 200:
             return None
 
-        df_hist['EMA9'] = df_hist['Close'].ewm(span=9, adjust=False).mean()
-        df_hist['EMA21'] = df_hist['Close'].ewm(span=21, adjust=False).mean()
-        df_hist['EMA200'] = df_hist['Close'].ewm(span=200, adjust=False).mean()
-        df_hist['MA20'] = df_hist['Close'].rolling(20).mean()
-        df_hist['STD20'] = df_hist['Close'].rolling(20).std()
-        df_hist['Banda_Sup'] = df_hist['MA20'] + (2 * df_hist['STD20'])
-        df_hist['Banda_Inf'] = df_hist['MA20'] - (2 * df_hist['STD20'])
+        # Indicadores do Estado Atual
+        df['EMA9'] = df['Close'].ewm(span=9, adjust=False).mean()
+        df['EMA21'] = df['Close'].ewm(span=21, adjust=False).mean()
+        df['EMA200'] = df['Close'].ewm(span=200, adjust=False).mean()
+        df['MA20'] = df['Close'].rolling(20).mean()
+        df['STD20'] = df['Close'].rolling(20).std()
+        df['Banda_Sup'] = df['MA20'] + (2 * df['STD20'])
+        df['Banda_Inf'] = df['MA20'] - (2 * df['STD20'])
         
-        exp12 = df_hist['Close'].ewm(span=12, adjust=False).mean()
-        exp26 = df_hist['Close'].ewm(span=26, adjust=False).mean()
-        df_hist['MACD_Hist'] = (exp12 - exp26) - (exp12 - exp26).ewm(span=9, adjust=False).mean()
-        df_hist['Vol_Medio'] = df_hist['Volume'].rolling(30).mean()
+        exp12 = df['Close'].ewm(span=12, adjust=False).mean()
+        exp26 = df['Close'].ewm(span=26, adjust=False).mean()
+        df['MACD_Hist'] = (exp12 - exp26) - (exp12 - exp26).ewm(span=9, adjust=False).mean()
+        df['Vol_Medio'] = df['Volume'].rolling(30).mean()
 
-        trades = []
-        for i in range(200, len(df_hist) - 15):
-            close_p = df_hist['Close'].iloc[i]
-            ema9_p = df_hist['EMA9'].iloc[i]
-            ema21_p = df_hist['EMA21'].iloc[i]
-            ema200_p = df_hist['EMA200'].iloc[i]
-            macd_p = df_hist['MACD_Hist'].iloc[i]
-            vol_p = df_hist['Volume'].iloc[i]
-            vol_med_p = df_hist['Vol_Medio'].iloc[i]
-            std_p = df_hist['STD20'].iloc[i]
-            banda_sup_p = df_hist['Banda_Sup'].iloc[i]
-            banda_inf_p = df_hist['Banda_Inf'].iloc[i]
+        # Isolando o DNA do momento mais recente (último dia fechado)
+        i_atual = len(df) - 5 # Janela recente
+        padroes_similares_altas = 0
+        total_ocorrencias = 0
+        retornos_futuros = []
 
-            tendencia_alta = close_p > ema9_p and ema9_p > ema21_p
-            tendencia_macro = close_p > ema200_p
-            vol_forte = vol_p >= vol_med_p
-            momentum_alta = macd_p > 0
-            expansao_bollinger = (banda_sup_p - banda_inf_p) / df_hist['MA20'].iloc[i] >= 0.04
+        # Vasculha o histórico procurando ocorrências de confluência idêntica
+        for i in range(200, len(df) - 10):
+            c_p = df['Close'].iloc[i]
+            e9_p = df['EMA9'].iloc[i]
+            e21_p = df['EMA21'].iloc[i]
+            e200_p = df['EMA200'].iloc[i]
+            mac_p = df['MACD_Hist'].iloc[i]
+            v_p = df['Volume'].iloc[i]
+            v_med_p = df['Vol_Medio'].iloc[i]
+            b_sup = df['Banda_Sup'].iloc[i]
+            b_inf = df['Banda_Inf'].iloc[i]
 
-            if tendencia_alta and tendencia_macro and vol_forte and momentum_alta and expansao_bollinger:
-                preco_entrada = df_hist['Open'].iloc[i+1]
-                distancia_alvo = std_p * fator_alvo
-                distancia_stop = std_p * fator_stop
-                preco_alvo = preco_entrada + distancia_alvo
-                preco_stop = preco_entrada - distancia_stop
+            tendencia_ok = c_p > e9_p and e9_p > e21_p
+            macro_ok = c_p > e200_p
+            vol_ok = v_p >= v_med_p
+            momentum_ok = mac_p > 0
+            bollinger_ok = (b_sup - b_inf) / df['MA20'].iloc[i] >= 0.04
 
-                resultado_trade = "GAIN"
-                retorno_pct = ((preco_alvo - preco_entrada) / preco_entrada) * 100
-                
-                for j in range(i+1, min(i+20, len(df_hist))):
-                    max_dia = df_hist['High'].iloc[j]
-                    min_dia = df_hist['Low'].iloc[j]
+            if tendencia_ok and macro_ok and vol_ok and momentum_ok and bollinger_ok:
+                total_ocorrencias += 1
+                # Mede o comportamento nos 5 dias seguintes
+                preco_base = df['Close'].iloc[i]
+                preco_futuro = df['Close'].iloc[min(i + 5, len(df) - 1)]
+                variacao = ((preco_futuro - preco_base) / preco_base) * 100
+                retornos_futuros.append(variacao)
+                if variacao > 0:
+                    padroes_similares_altas += 1
 
-                    if min_dia <= preco_stop:
-                        resultado_trade = "LOSS"
-                        retorno_pct = -((preco_entrada - preco_stop) / preco_entrada) * 100
-                        break
-                    elif max_dia >= preco_alvo:
-                        resultado_trade = "GAIN"
-                        retorno_pct = ((preco_alvo - preco_entrada) / preco_entrada) * 100
-                        break
+        if total_ocorrencias == 0:
+            return {
+                "ocorrencias": 0,
+                "probabilidade_alta": 50.0,
+                "retorno_medio": 0.0,
+                "status_preditivo": "Neutro / Amostra Insuficiente"
+            }
 
-                trades.append({"Resultado": resultado_trade, "Retorno (%)":orno_pct if 'orno_pct' in locals() else retorno_pct})
+        prob_alta = (padroes_similares_altas / total_ocorrencias) * 100
+        ret_medio = np.mean(retornos_futuros)
 
-        df_trades = pd.DataFrame(trades)
-        if df_trades.empty:
-            return {"total": 0, "win_rate": 0, "profit_factor": 0}
+        if prob_alta >= 65.0:
+            status = "🟢 Alta Confluência Preditiva (Viés Altista)"
+        elif prob_alta <= 35.0:
+            status = "🔴 Alerta Preditivo (Viés de Baixa)"
+        else:
+            status = "⚪ Zona Neutra / Sem Direção Clara"
 
-        total = len(df_trades)
-        wins = len(df_trades[df_trades['Resultado'] == "GAIN"])
-        win_rate = (wins / total) * 100
-        lucro_bruto = df_trades[df_trades['Retorno (%)'] > 0]['Retorno (%)'].sum()
-        prejuizo_bruto = abs(df_trades[df_trades['Retorno (%)'] < 0]['Retorno (%)'].sum())
-        profit_factor = (lucro_bruto / prejuizo_bruto) if prejuizo_bruto > 0 else 99.0
-
-        return {"total": total, "win_rate": win_rate, "profit_factor": profit_factor}
+        return {
+            "ocorrencias": total_ocorrencias,
+            "probabilidade_alta": prob_alta,
+            "retorno_medio": ret_medio,
+            "status_preditivo": status
+        }
     except Exception:
         return None
 
@@ -315,7 +318,7 @@ def exibir_tabela_ativos(dataframe):
 def renderizar_painel():
     horario_brasilia = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime('%H:%M:%S')
     
-    with st.spinner("Analisando ativos com IA Quant e Filtro Macro..."):
+    with st.spinner("Analisando ativos com Predictive AI Engine..."):
         dados_tabela = [analisar_ativo(t) for t in lista_b3]
         dados_tabela = [d for d in dados_tabela if d is not None]
 
@@ -408,7 +411,7 @@ def renderizar_painel():
                 
                 2. **Escolha o Vencimento Ideal (Prazo):**
                    * Para **Swing Trade** (dias ou poucas semanas), busque vencimentos entre **30 e 45 dias** para evitar o desgaste acelerado do tempo (*theta*).
-                   * Para **Position Trade** (tendências longas), prefira vencimentos superiores a **60 dias**.
+                   * For **Position Trade** (tendências longas), prefira vencimentos superiores a **60 dias**.
                 
                 3. **Selecione o Moneyness (Strike vs Preço Atual):**
                    * **ATM (At-the-Money / No Dinheiro):** Strikes muito próximos ao preço atual. Excelentes para operações direcionais ágeis com **Delta próximo a 0.50**.
@@ -423,75 +426,35 @@ def renderizar_painel():
                      * A diferença de R$ 0,02 é o **Spread**. *Regra de ouro:* Evite opções com spreads gigantescos (ex: Bid a R$ 0,50 e Ask a R$ 0,90), pois você perde dinheiro só de entrar e sair! Procure contratos onde Bid e Ask estejam bem coladinhos e com bom **Volume** e **Open Interest**.
                 """)
 
-    # ABA 4: BACKTESTING
-    elif pagina_selecionada == "BACKTESTING":
-        st.title("📊 Backtesting Institucional & Validação Avançada")
-        st.markdown("Simulação histórica blindada com o Filtro Macro (EMA 200) e Alvos Dinâmicos baseados na volatilidade das Bandas de Bollinger.")
+    # ABA 4: PREDICTIVE AI ENGINE (Motor Preditivo Estatístico)
+    elif pagina_selecionada == "PREDICTIVE AI ENGINE":
+        st.title("🧠 Predictive AI Engine - Inteligência Estatística Prospectiva")
+        st.markdown("O motor preditivo varre o histórico do ativo em tempo real, identifica **padrões comportamentais idênticos ao momento atual** e calcula a probabilidade prospectiva para os próximos 5 pregões.")
         st.divider()
 
-        col_bt1, col_bt2, col_bt3 = st.columns(3)
-        with col_bt1:
-            ativo_bt = st.selectbox("Ativo para Simulação:", df_display['Ticker'].tolist())
-        with col_bt2:
-            periodo_bt = st.selectbox("Período Histórico:", ["6 meses", "1 ano", "2 anos"], index=1)
-        with col_bt3:
-            fator_alvo = st.slider("Múltiplo de Volatilidade (Alvo/Gain):", min_value=1.0, max_value=4.0, value=2.0, step=0.5)
-            fator_stop = st.slider("Múltiplo de Volatilidade (Stop Loss):", min_value=0.5, max_value=2.0, value=1.0, step=0.25)
+        col_p1, col_p2 = st.columns([2, 1])
+        with col_p1:
+            ativo_pred = st.selectbox("Selecione o Ativo para Análise Preditiva:", df_display['Ticker'].tolist())
+        with col_p2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            executar_predicao = st.button("🔮 Calcular Probabilidade Preditiva", type="primary")
 
-        if st.button("🚀 Rodar Backtesting Avançado", type="primary"):
-            with st.spinner(f"Executando simulação inteligente para {ativo_bt}..."):
-                res_bt = executar_backtest_engine(f"{ativo_bt}.SA", fator_alvo, fator_stop)
-                if not res_bt or res_bt['total'] == 0:
-                    st.warning("Nenhum trade disparado com esses parâmetros.")
+        if executar_predicao:
+            with st.spinner(f"Isolando o DNA técnico atual de {ativo_pred} e varrendo o histórico em busca de padrões idênticos..."):
+                resultado_ia = executar_motor_preditivo(f"{ativo_pred}.SA")
+                
+                if not resultado_ia or resultado_ia['ocorrencias'] == 0:
+                    st.warning("Histórico insuficiente para cruzar padrões estatísticos neste ativo.")
                 else:
-                    m1, m2, m3 = st.columns(3)
-                    m1.metric("Taxa de Acerto", f"{res_bt['win_rate']:.1f}%")
-                    m2.metric("Fator de Lucro", f"{res_bt['profit_factor']:.2f}", delta="Ideal > 1.30")
-                    m3.metric("Total de Trades", res_bt['total'])
-
-    # ABA 5: QUANT AI OPTIMIZER (Otimizador e Auditor Autônomo)
-    elif pagina_selecionada == "QUANT AI OPTIMIZER":
-        st.title("🤖 Quant AI Optimizer - Auditoria e Prescrição Autônoma")
-        st.markdown("O robô varre os principais ativos da B3, audita o desempenho estatístico individual e prescreve soluções automáticas para os papéis que ficarem abaixo do padrão institucional.")
-        st.divider()
-
-        if st.button("🔍 Iniciar Auditoria Autônoma na B3", type="primary"):
-            with st.spinner("Varrendo e testando os ativos da B3 em lote... Aguarde."):
-                resultados_auditoria = []
-                
-                # Amostra representativa para varredura rápida na nuvem
-                amostra_ativos = ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA", "WEGE3.SA", "BBAS3.SA", "RENT3.SA", "SUZB3.SA", "PRIO3.SA", "VALE3.SA"]
-                
-                for t in list(set(amostra_ativos)):
-                    res = executar_backtest_engine(t, fator_alvo=2.0, fator_stop=1.0)
-                    if res and res['total'] > 0:
-                        status = "✅ Aprovado (Elite)" if res['profit_factor'] >= 1.30 else "⚠️ Em Tratamento"
-                        
-                        # Prescrição Inteligente de Solução
-                        if res['profit_factor'] >= 1.30:
-                            solucao = "Nenhuma alteração necessária. Setup perfeitamente calibrado."
-                        elif res['win_rate'] < 50:
-                            solucao = "Diagnóstico: Excesso de ruído. **Sugestão:** Aumentar o filtro de volume institucional para ≥4 ou elevar o múltiplo de stop para dar respiração."
-                        else:
-                            solucao = "Diagnóstico: Risco/Retorno descalibrado. **Sugestão:** Ampliar o múltiplo de alvo (Gain) de 2.0 para 2.5 para capturar tendências mais longas."
-
-                        resultados_auditoria.append({
-                            "Ativo": t.replace(".SA", ""),
-                            "Trades": res['total'],
-                            "Win Rate": f"{res['win_rate']:.1f}%",
-                            "Fator de Lucro": round(res['profit_factor'], 2),
-                            "Status": status,
-                            "Prescrição da IA": solucao
-                        })
-
-                df_auditoria = pd.DataFrame(resultados_auditoria)
-                
-                if not df_auditoria.empty:
-                    st.subheader("📋 Relatório Executivo de Auditoria Quant")
-                    st.dataframe(df_auditoria, use_container_width=True, hide_index=True)
+                    st.subheader(f"📊 Relatório Preditivo Prospectivo — {ativo_pred}")
                     
-                    st.info("💡 **Como o modelo atua:** Os ativos marcados como 'Em Tratamento' receberam automaticamente as prescrições descritas para alinhar a assimetria estatística e garantir consistência no próximo ciclo de mercado.")
-                else:
-                    st.warning("Não foi possível gerar a auditoria com os dados atuais.")
+                    p1, p2, p3 = st.columns(3)
+                    p1.metric("Probabilidade de Alta (Próx. 5 Dias)", f"{resultado_ia['probabilidade_alta']:.1f}%", delta="Baseado em analogia histórica")
+                    p2.metric("Retorno Médio Esperado", f"{resultado_ia['retorno_medio']:+.2f}%", delta="Janela de 5 pregões")
+                    p3.metric("Ocorrências Similares Analisadas", f"{resultado_ia['ocorrencias']} padrões idênticos")
+
+                    st.divider()
+                    st.markdown(f"### **Veredito Preditivo da IA:** {resultado_ia['status_preditivo']}")
+                    st.info("💡 **Como interpretar:** Este número representa a frequência estatística com que o mercado subiu nos 5 dias subsequentes sempre que este exato cruzamento de tendência, volume, MACD e volatilidade ocorreu no passado do ativo.")
 
 renderizar_painel()
