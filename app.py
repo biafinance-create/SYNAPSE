@@ -271,30 +271,26 @@ def renderizar_painel():
 
         exibir_tabela_ativos(df_filtrado)
 
-    # ABA 3: OPTIONS SCANNER (Novo Módulo de Derivativos e Opções)
+    # ABA 3: OPTIONS SCANNER
     elif pagina_selecionada == "OPTIONS SCANNER":
         st.title("🎯 Options Scanner - Autofiltragem de Calls e Puts")
         st.markdown("Analise a cadeia de opções de qualquer ativo da B3 com filtros automáticos de Moneyness, Liquidez e Vencimento.")
         st.divider()
 
-        # Seleção do Ativo base para buscar as opções
         tickers_disponiveis = df_display['Ticker'].tolist()
         ativo_escolhido = st.selectbox("Selecione o Ativo Base:", tickers_disponiveis)
 
         if ativo_escolhido:
-            # Obtém o preço atual do ativo selecionado
             preco_ativo = df_display.loc[df_display['Ticker'] == ativo_escolhido, 'Preco_Atual'].values[0]
             st.markdown(f"💵 **Preço Atual de {ativo_escolhido}:** R$ {preco_ativo:.2f}")
 
             try:
-                # Buscando a cadeia de opções via yfinance
                 ticker_yf = yf.Ticker(f"{ativo_escolhido}.SA")
                 vencimentos = ticker_yf.options
 
                 if not vencimentos:
                     st.warning(f"Não foram encontradas opções disponíveis para {ativo_escolhido} no momento.")
                 else:
-                    # Filtros na barra lateral ou na tela principal
                     col_f1, col_f2, col_f3 = st.columns(3)
                     
                     with col_f1:
@@ -304,44 +300,37 @@ def renderizar_painel():
                     with col_f3:
                         moneyness_filtro = st.selectbox("Classificação (Moneyness):", ["TODOS", "ATM (No Dinheiro)", "ITM (Dentro do Dinheiro)", "OTM (Fora do Dinheiro)"])
 
-                    # Carrega a tabela de opções para o vencimento selecionado
-                     cadeia = ticker_yf.option_chain(vencimento_escolhido)
+                    cadeia = ticker_yf.option_chain(vencimento_escolhido)
                     tabela_opcoes = cadeia.calls if tipo_opcao == "CALL" else cadeia.puts
 
                     if not tabela_opcoes.empty:
-                        # Cálculo da Distância do Strike em relação ao Preço Atual (Moneyness)
                         tabela_opcoes['Distancia_%'] = ((tabela_opcoes['strike'] - preco_ativo) / preco_ativo) * 100
 
-                        # Classificação automática ATM / ITM / OTM
                         def classificar_moneyness(row, tipo, preco):
                             strike = row['strike']
                             if tipo == "CALL":
                                 if abs(strike - preco) / preco <= 0.03: return "ATM"
                                 elif strike < preco: return "ITM"
                                 else: return "OTM"
-                            else: # PUT
+                            else:
                                 if abs(strike - preco) / preco <= 0.03: return "ATM"
                                 elif strike > preco: return "ITM"
                                 else: return "OTM"
 
                         tabela_opcoes['Status'] = tabela_opcoes.apply(lambda r: classificar_moneyness(r, tipo_opcao, preco_ativo), axis=1)
 
-                        # Aplicando o filtro de Moneyness selecionado pelo usuário
                         if moneyness_filtro != "TODOS":
                             sigla_filtro = moneyness_filtro.split(" ")[0]
                             tabela_opcoes = tabela_opcoes[tabela_opcoes['Status'] == sigla_filtro]
 
-                        # Filtros e formatação de colunas limpas
                         tabela_limpa = tabela_opcoes[['contractSymbol', 'strike', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest', 'impliedVolatility', 'Status']].copy()
                         tabela_limpa.columns = ['Contrato', 'Strike (R$)', 'Último (R$)', 'Bid', 'Ask', 'Volume', 'Open Interest', 'Vol. Implicita', 'Moneyness']
 
-                        # Ordenando por volume (maior liquidez primeiro)
                         tabela_limpa = tabela_limpa.sort_values(by='Volume', ascending=False).fillna(0)
 
                         st.subheader(f"📋 Cadeia de {tipo_opcao}s Filtrada — Vencimento: {vencimento_escolhido}")
                         st.markdown(f"Mostrando opções para **{ativo_escolhido}** com base nos critérios selecionados:")
 
-                        # Exibindo tabela interativa polida
                         st.dataframe(
                             tabela_limpa,
                             use_container_width=True,
