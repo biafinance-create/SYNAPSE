@@ -28,9 +28,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# BARRA LATERAL COM A NAVEGAÇÃO
+# BARRA LATERAL COM NAVEGAÇÃO EXPANDIDA
 st.sidebar.title("🧭 Navegação Synapse")
-pagina_selecionada = st.sidebar.radio("Selecione o Módulo:", ["MARKET X-RAY", "MARKET FEELING"])
+pagina_selecionada = st.sidebar.radio("Selecione o Módulo:", ["MARKET X-RAY", "MARKET FEELING", "OPTIONS SCANNER"])
 
 # Lista abrangente de ativos da B3
 lista_b3 = [
@@ -62,7 +62,7 @@ def analisar_ativo(ticker):
         df['EMA9'] = df['Close'].ewm(span=9, adjust=False).mean()
         df['EMA21'] = df['Close'].ewm(span=21, adjust=False).mean()
         
-        # 2. Força do Mercado baseada em Volatilidade / Desvio Padrão (Bandas de Bollinger)
+        # 2. Força baseada em Volatilidade / Desvio Padrão (Bandas de Bollinger)
         df['MA20'] = df['Close'].rolling(20).mean()
         df['STD20'] = df['Close'].rolling(20).std()
         df['Banda_Superior'] = df['MA20'] + (2 * df['STD20'])
@@ -157,18 +157,17 @@ def analisar_ativo(ticker):
             "Prob 1H": prob_1h_str,
             "Prob 1D": prob_1d_str,
             "Prob 1S": prob_1s_str,
-            "Sinal Final": sinal
+            "Sinal Final": sinal,
+            "Preco_Atual": close_atual
         }
     except Exception as e:
         return None
 
-# Função auxiliar para renderizar a tabela limpa de ativos
 def exibir_tabela_ativos(dataframe):
     if dataframe.empty:
         st.info("Nenhum ativo encontrado para este filtro no momento.")
         return
 
-    # Cabeçalho Fixo
     st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
     header_cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
     headers = ["Ticker", "Volume (1-5)", "Tendência", "Força", "Prob 1H", "Prob 1D", "Prob 1S", "Sinal Final"]
@@ -176,7 +175,6 @@ def exibir_tabela_ativos(dataframe):
         col.markdown(f"**{h}**")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Linhas dos Ativos
     for idx, row in dataframe.iterrows():
         cols = st.columns([1.5, 1.5, 1.5, 1.5, 1.2, 1.2, 1.2, 1.5])
         
@@ -231,7 +229,7 @@ def renderizar_painel():
         st.divider()
         exibir_tabela_ativos(df_display)
 
-    # ABA 2: MARKET FEELING (Com interatividade nas Oportunidades de Trade)
+    # ABA 2: MARKET FEELING
     elif pagina_selecionada == "MARKET FEELING":
         st.title("🌡️ Market Feeling - Termômetro Macro do Mercado")
         st.markdown(f"Visão executiva e agregada do sentimento atual da B3. *Última atualização: {horario_brasilia} (Brasília)*")
@@ -250,63 +248,109 @@ def renderizar_painel():
         tot_short = len(df_display[df_display['Sinal Final'].str.contains("SHORT")])
         tot_neutro = len(df_display[df_display['Sinal Final'].str.contains("NEUTRO")])
 
-        # As 3 Caixinhas de Resumo Executivo
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.metric(
-                label="🐂 Sentimento Geral da B3", 
-                value=f"{perc_alta}% Alta", 
-                delta=f"{tot_bull} Bull | {tot_bear} Bear | {tot_lateral} Lateral"
-            )
-            st.info("Mede o percentual de ativos da amostra negociando acima das médias móveis de tendência.")
-
+            st.metric(label="🐂 Sentimento Geral da B3", value=f"{perc_alta}% Alta", delta=f"{tot_bull} Bull | {tot_bear} Bear")
         with col2:
-            st.metric(
-                label="📊 Pressão de Fluxo (Volume)", 
-                value=f"{ativos_vol_forte} / {total_ativos} Ativos", 
-                delta=f"{perc_volume}% com Volume Saudável (≥3)"
-            )
-            st.warning("Indica se o mercado está tendo fluxo financeiro institucional ou operando no vazio.")
-
+            st.metric(label="📊 Pressão de Fluxo (Volume)", value=f"{ativos_vol_forte} / {total_ativos} Ativos", delta=f"{perc_volume}% com Volume Saudável (≥3)")
         with col3:
-            st.metric(
-                label="🎯 Oportunidades de Trade", 
-                value=f"{tot_long} Long | {tot_short} Short", 
-                delta=f"{tot_neutro} Ativos Neutros / De Fora"
-            )
-            st.success("Contagem de ativos com alinhamento completo na orquestra prontos para execução.")
+            st.metric(label="🎯 Oportunidades de Trade", value=f"{tot_long} Long | {tot_short} Short", delta=f"{tot_neutro} Neutros")
 
         st.divider()
-
-        # SEÇÃO INTERATIVA DE OPORTUNIDADES DE TRADE
         st.subheader("⚡ Filtrar Oportunidades de Trade Ativas")
-        st.markdown("Clique em um dos botões abaixo para abrir e visualizar instantaneamente os ativos recomendados para operação:")
-
-        # Botões de seleção interativa
-        filtro_col1, filtro_col2, filtro_col3 = st.columns(3)
-        
-        # Inicializa o estado da sessão para controle dos botões se necessário, ou usa lógica simples via radio/select
-        opcao_filtro = st.radio(
-            "Selecione o filtro de oportunidades:", 
-            ["Mostrar Todos", "🟢 Oportunidades LONG", "🔴 Oportunidades SHORT"],
-            horizontal=True
-        )
-
+        opcao_filtro = st.radio("Selecione o filtro:", ["Mostrar Todos", "🟢 Oportunidades LONG", "🔴 Oportunidades SHORT"], horizontal=True)
         st.markdown("---")
 
-        # Filtrando o DataFrame com base na escolha do usuário
         if opcao_filtro == "🟢 Oportunidades LONG":
             df_filtrado = df_display[df_display['Sinal Final'].str.contains("LONG")]
-            st.subheader(f"🟢 Ativos com Sinal LONG ({len(df_filtrado)})")
         elif opcao_filtro == "🔴 Oportunidades SHORT":
             df_filtrado = df_display[df_display['Sinal Final'].str.contains("SHORT")]
-            st.subheader(f"🔴 Ativos com Sinal SHORT ({len(df_filtrado)})")
         else:
             df_filtrado = df_display
-            st.subheader(f"📋 Todos os Ativos Monitorados ({len(df_filtrado)})")
 
-        # Exibe a tabela correspondente ao filtro escolhido
         exibir_tabela_ativos(df_filtrado)
+
+    # ABA 3: OPTIONS SCANNER (Novo Módulo de Derivativos e Opções)
+    elif pagina_selecionada == "OPTIONS SCANNER":
+        st.title("🎯 Options Scanner - Autofiltragem de Calls e Puts")
+        st.markdown("Analise a cadeia de opções de qualquer ativo da B3 com filtros automáticos de Moneyness, Liquidez e Vencimento.")
+        st.divider()
+
+        # Seleção do Ativo base para buscar as opções
+        tickers_disponiveis = df_display['Ticker'].tolist()
+        ativo_escolhido = st.selectbox("Selecione o Ativo Base:", tickers_disponiveis)
+
+        if ativo_escolhido:
+            # Obtém o preço atual do ativo selecionado
+            preco_ativo = df_display.loc[df_display['Ticker'] == ativo_escolhido, 'Preco_Atual'].values[0]
+            st.markdown(f"💵 **Preço Atual de {ativo_escolhido}:** R$ {preco_ativo:.2f}")
+
+            try:
+                # Buscando a cadeia de opções via yfinance
+                ticker_yf = yf.Ticker(f"{ativo_escolhido}.SA")
+                vencimentos = ticker_yf.options
+
+                if not vencimentos:
+                    st.warning(f"Não foram encontradas opções disponíveis para {ativo_escolhido} no momento.")
+                else:
+                    # Filtros na barra lateral ou na tela principal
+                    col_f1, col_f2, col_f3 = st.columns(3)
+                    
+                    with col_f1:
+                        tipo_opcao = st.selectbox("Tipo de Opção:", ["CALL", "PUT"])
+                    with col_f2:
+                        vencimento_escolhido = st.selectbox("Data de Vencimento:", vencimentos)
+                    with col_f3:
+                        moneyness_filtro = st.selectbox("Classificação (Moneyness):", ["TODOS", "ATM (No Dinheiro)", "ITM (Dentro do Dinheiro)", "OTM (Fora do Dinheiro)"])
+
+                    # Carrega a tabela de opções para o vencimento selecionado
+                     cadeia = ticker_yf.option_chain(vencimento_escolhido)
+                    tabela_opcoes = cadeia.calls if tipo_opcao == "CALL" else cadeia.puts
+
+                    if not tabela_opcoes.empty:
+                        # Cálculo da Distância do Strike em relação ao Preço Atual (Moneyness)
+                        tabela_opcoes['Distancia_%'] = ((tabela_opcoes['strike'] - preco_ativo) / preco_ativo) * 100
+
+                        # Classificação automática ATM / ITM / OTM
+                        def classificar_moneyness(row, tipo, preco):
+                            strike = row['strike']
+                            if tipo == "CALL":
+                                if abs(strike - preco) / preco <= 0.03: return "ATM"
+                                elif strike < preco: return "ITM"
+                                else: return "OTM"
+                            else: # PUT
+                                if abs(strike - preco) / preco <= 0.03: return "ATM"
+                                elif strike > preco: return "ITM"
+                                else: return "OTM"
+
+                        tabela_opcoes['Status'] = tabela_opcoes.apply(lambda r: classificar_moneyness(r, tipo_opcao, preco_ativo), axis=1)
+
+                        # Aplicando o filtro de Moneyness selecionado pelo usuário
+                        if moneyness_filtro != "TODOS":
+                            sigla_filtro = moneyness_filtro.split(" ")[0]
+                            tabela_opcoes = tabela_opcoes[tabela_opcoes['Status'] == sigla_filtro]
+
+                        # Filtros e formatação de colunas limpas
+                        tabela_limpa = tabela_opcoes[['contractSymbol', 'strike', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest', 'impliedVolatility', 'Status']].copy()
+                        tabela_limpa.columns = ['Contrato', 'Strike (R$)', 'Último (R$)', 'Bid', 'Ask', 'Volume', 'Open Interest', 'Vol. Implicita', 'Moneyness']
+
+                        # Ordenando por volume (maior liquidez primeiro)
+                        tabela_limpa = tabela_limpa.sort_values(by='Volume', ascending=False).fillna(0)
+
+                        st.subheader(f"📋 Cadeia de {tipo_opcao}s Filtrada — Vencimento: {vencimento_escolhido}")
+                        st.markdown(f"Mostrando opções para **{ativo_escolhido}** com base nos critérios selecionados:")
+
+                        # Exibindo tabela interativa polida
+                        st.dataframe(
+                            tabela_limpa,
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                    else:
+                        st.info("Nenhum contrato encontrado para este vencimento.")
+
+            except Exception as e:
+                st.error(f"Erro ao carregar a cadeia de opções para {ativo_escolhido}: {e}")
 
 renderizar_painel()
