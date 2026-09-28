@@ -278,7 +278,7 @@ def renderizar_painel():
 
         exibir_tabela_ativos(df_filtrado)
 
-    # ABA 3: OPTIONS SCANNER (Com Link Direto e Passo a Passo Profissional)
+    # ABA 3: OPTIONS SCANNER (Com Guia de Bid/Ask e Passo a Passo)
     elif pagina_selecionada == "OPTIONS SCANNER":
         st.title("🎯 Options Scanner - Central de Derivativos")
         st.markdown("Acesse a grade completa de opções na B3 e utilize o passo a passo profissional para operações direcionais de alta performance.")
@@ -290,7 +290,6 @@ def renderizar_painel():
         if ativo_escolhido:
             preco_ativo = df_display.loc[df_display['Ticker'] == ativo_escolhido, 'Preco_Atual'].values[0]
             
-            # Caixa de destaque com o link direto para o Opcoes.net.br
             st.markdown(f"""
                 <div style="background-color: #1e293b; padding: 20px; border-radius: 10px; border: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
                     <div>
@@ -303,7 +302,6 @@ def renderizar_painel():
                 </div>
             """, unsafe_allow_html=True)
 
-            # PASSO A PASSO PROFISSIONAL PARA OPERAÇÕES DIRECIONAIS
             with st.expander("📖 Guia Passo a Passo: Como escolher a melhor opção para Swing/Position Trade", expanded=True):
                 st.markdown("""
                 Siga esta metodologia de sniper para filtrar e escolher a opção ideal ao abrir a grade externa:
@@ -313,16 +311,20 @@ def renderizar_painel():
                    * Se deu **SHORT 🔴**, foque exclusivamente em **PUTs** (opções de venda).
                 
                 2. **Escolha o Vencimento Ideal (Prazo):**
-                   * Para operações de **Swing Trade** (durando dias ou poucas semanas), busque vencimentos entre **30 e 45 dias** para evitar o desgaste rápido do *theta* (decay temporal).
+                   * Para **Swing Trade** (dias ou poucas semanas), busque vencimentos entre **30 e 45 dias** para evitar o desgaste acelerado do tempo (*theta*).
                    * Para **Position Trade** (tendências longas), prefira vencimentos superiores a **60 dias**.
                 
                 3. **Selecione o Moneyness (Strike vs Preço Atual):**
-                   * **ATM (At-the-Money / No Dinheiro):** Strikes muito próximos ao preço atual. São excelentes para operações direcionais rápidas, pois possuem boa alavancagem e **Delta próximo a 0.50**.
-                   * **OTM Leve (Fora do Dinheiro de 2% a 5%):** Prêmios mais baratos (pó controlado). Ideais se você busca alta assimetria (arriscar pouco para buscar um movimento explosivo de rompimento).
+                   * **ATM (At-the-Money / No Dinheiro):** Strikes muito próximos ao preço atual. Excelentes para operações direcionais ágeis com **Delta próximo a 0.50**.
+                   * **OTM Leve (Fora do Dinheiro de 2% a 5%):** Prêmios mais baratos (pó controlado). Ideais para buscar alta assimetria e alavancagem em rompimentos.
                 
-                4. **Filtre por Liquidez (O Critério de Ouro):**
-                   * Nunca compre ou venda opções sem negócio. No **Opcoes.net.br**, filtre ou ordene pelo **Volume Financeiro** e **Open Interest (Em Aberto)**.
-                   * Garanta que o *bid/ask* (oferta de compra e venda) não tenha um spread gigante para facilitar a sua saída da operação.
+                4. **Valide a Liquidez via Bid / Ask (O Critério de Ouro):**
+                   * **Bid (Compra):** O preço máximo que o mercado está disposto a **pagar** para comprar o ativo de você.
+                   * **Ask (Venda):** O preço mínimo que o mercado está pedindo para **vender** o ativo para você.
+                   * **Exemplo Prático na Prateleira:** Imagine que uma opção de PETR4 mostra no book: `Bid = R$ 0,80` e `Ask = R$ 0,82`. 
+                     * Se você quiser **comprar** a mercado agora, você vai pagar o preço do vendedor (`R$ 0,82`).
+                     * Se você quiser **vender** (sair da posição) a mercado logo em seguida, você vai entregar pelo preço do comprador (`R$ 0,80`). 
+                     * A diferença de R$ 0,02 é o **Spread**. *Regra de ouro:* Evite opções com spreads gigantescos (ex: Bid a R$ 0,50 e Ask a R$ 0,90), pois você perde dinheiro só de entrar e sair! Procure contratos onde Bid e Ask estejam bem coladinhos e com bom **Volume** e **Open Interest**.
                 """)
 
 renderizar_painel()
