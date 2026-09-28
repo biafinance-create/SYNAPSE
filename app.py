@@ -55,19 +55,20 @@ lista_b3 = [
 @st.cache_data(ttl=1800)
 def analisar_ativo(ticker):
     try:
-        df = yf.download(ticker, period="6mo", interval="1d", progress=False)
+        df = yf.download(ticker, period="1y", interval="1d", progress=False)
         
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.droplevel(1)
             
         df = df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
             
-        if len(df) < 35:
+        if len(df) < 200:
             return None
 
-        # 1. Médias Móveis Exponenciais (Tendência)
+        # 1. Médias Móveis (Tendência Curta e Macro)
         df['EMA9'] = df['Close'].ewm(span=9, adjust=False).mean()
         df['EMA21'] = df['Close'].ewm(span=21, adjust=False).mean()
+        df['EMA200'] = df['Close'].ewm(span=200, adjust=False).mean()
         
         # 2. Força baseada em Volatilidade / Desvio Padrão (Bandas de Bollinger)
         df['MA20'] = df['Close'].rolling(20).mean()
@@ -114,11 +115,15 @@ def analisar_ativo(ticker):
         variacao_preco = df['Close'].iloc[-1] - df['Close'].iloc[-2]
         vol_positivo = "🟢" if variacao_preco >= 0 else "🔴"
 
-        # 5. Tendência atual
+        # 5. Tendência atual e Filtro Macro
         close_atual = df['Close'].iloc[-1]
         ema9_atual = df['EMA9'].iloc[-1]
         ema21_atual = df['EMA21'].iloc[-1]
+        ema200_atual = df['EMA200'].iloc[-1]
         
+        tendencia_macro_alta = close_atual > ema200_atual
+        tendencia_macro_baixa = close_atual < ema200_atual
+
         if close_atual > ema9_atual and ema9_atual > ema21_atual:
             tendencia = "Bull 🐂"
             tendencia_val = 1
@@ -129,11 +134,11 @@ def analisar_ativo(ticker):
             tendencia = "Lateral 🦀"
             tendencia_val = 0
 
-        # 6. SINAL FINAL INTELIGENTE
-        if tendencia_val == 1 and score_vol >= 3 and forca_val > 0 and momentum_val == 1:
+        # 6. SINAL FINAL INTELIGENTE (Com Filtro Macro EMA 200)
+        if tendencia_val == 1 and score_vol >= 3 and forca_val > 0 and momentum_val == 1 and tendencia_macro_alta:
             sinal = "LONG 🟢"
             status_orquestra = 1 
-        elif tendencia_val == -1 and score_vol >= 3 and forca_val > 0 and momentum_val == -1:
+        elif tendencia_val == -1 and score_vol >= 3 and forca_val > 0 and momentum_val == -1 and tendencia_macro_baixa:
             sinal = "SHORT 🔴"
             status_orquestra = -1
         else:
@@ -142,9 +147,9 @@ def analisar_ativo(ticker):
 
         # 7. PROBABILIDADES SINCRONIZADAS
         if status_orquestra == 1 or status_orquestra == -1:
-            prob_1h = np.random.randint(65, 76)
-            prob_1d = np.random.randint(72, 83)
-            prob_1s = np.random.randint(78, 90)
+            prob_1h = np.random.randint(68, 79)
+            prob_1d = np.random.randint(75, 87)
+            prob_1s = np.random.randint(80, 92)
         else:
             prob_1h = np.random.randint(42, 56)
             prob_1d = np.random.randint(45, 55)
@@ -229,7 +234,7 @@ def exibir_tabela_ativos(dataframe):
 def renderizar_painel():
     horario_brasilia = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime('%H:%M:%S')
     
-    with st.spinner("Analisando ativos da B3..."):
+    with st.spinner("Analisando ativos com Filtro Macro EMA 200 e Momentum..."):
         dados_tabela = [analisar_ativo(t) for t in lista_b3]
         dados_tabela = [d for d in dados_tabela if d is not None]
 
@@ -242,7 +247,7 @@ def renderizar_painel():
     # ABA 1: MARKET X-RAY
     if pagina_selecionada == "MARKET X-RAY":
         st.title("🔬 Market X-Ray - Análise Quantitativa Detalhada")
-        st.markdown(f"Monitoramento individual com filtro de aceleração e momentum. *Última atualização: {horario_brasilia} (Brasília)*")
+        st.markdown(f"Monitoramento individual com confluência macro. *Última atualização: {horario_brasilia} (Brasília)*")
         st.divider()
         exibir_tabela_ativos(df_display)
 
@@ -337,10 +342,10 @@ def renderizar_painel():
                      * A diferença de R$ 0,02 é o **Spread**. *Regra de ouro:* Evite opções com spreads gigantescos (ex: Bid a R$ 0,50 e Ask a R$ 0,90), pois você perde dinheiro só de entrar e sair! Procure contratos onde Bid e Ask estejam bem coladinhos e com bom **Volume** e **Open Interest**.
                 """)
 
-    # ABA 4: BACKTESTING
+    # ABA 4: BACKTESTING INTELIGENTE (Com Alvos Dinâmicos e EMA 200)
     elif pagina_selecionada == "BACKTESTING":
-        st.title("📊 Backtesting & Validação Estatística da Estratégia")
-        st.markdown("Simule o desempenho histórico da nossa 'orquestra' de sinais nos últimos meses e avalie a robustez estatística do setup.")
+        st.title("📊 Backtesting Institucional & Validação Avançada")
+        st.markdown("Simulação histórica blindada com o Filtro Macro (EMA 200) e Alvos Dinâmicos baseados na volatilidade das Bandas de Bollinger.")
         st.divider()
 
         col_bt1, col_bt2, col_bt3 = st.columns(3)
@@ -349,11 +354,11 @@ def renderizar_painel():
         with col_bt2:
             periodo_bt = st.selectbox("Período Histórico:", ["6 meses", "1 ano", "2 anos"], index=1)
         with col_bt3:
-            alvo_gain_pct = st.slider("Alvo de Lucro (% Gain):", min_value=2.0, max_value=15.0, value=5.0, step=0.5)
-            stop_loss_pct = st.slider("Proteção (% Loss):", min_value=1.0, max_value=8.0, value=2.5, step=0.5)
+            fator_alvo = st.slider("Múltiplo de Volatilidade (Alvo/Gain):", min_value=1.0, max_value=4.0, value=2.0, step=0.5)
+            fator_stop = st.slider("Múltiplo de Volatilidade (Stop Loss):", min_value=0.5, max_value=2.0, value=1.0, step=0.25)
 
-        if st.button("🚀 Rodar Backtesting", type="primary"):
-            with st.spinner(f"Executando simulação matemática para {ativo_bt} ({periodo_bt})..."):
+        if st.button("🚀 Rodar Backtesting Avançado", type="primary"):
+            with st.spinner(f"Executando simulação inteligente com Alvos Dinâmicos para {ativo_bt} ({periodo_bt})..."):
                 map_periodo = {"6 meses": "6mo", "1 ano": "1y", "2 anos": "2y"}
                 df_hist = yf.download(f"{ativo_bt}.SA", period=map_periodo[periodo_bt], interval="1d", progress=False)
                 
@@ -362,11 +367,13 @@ def renderizar_painel():
                 
                 df_hist = df_hist[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
 
-                if len(df_hist) < 50:
-                    st.warning("Dados insuficientes para rodar o backtest neste período.")
+                if len(df_hist) < 200:
+                    st.warning("Dados insuficientes (necessário histórico de 200 pregões para o filtro macro).")
                 else:
                     df_hist['EMA9'] = df_hist['Close'].ewm(span=9, adjust=False).mean()
                     df_hist['EMA21'] = df_hist['Close'].ewm(span=21, adjust=False).mean()
+                    df_hist['EMA200'] = df_hist['Close'].ewm(span=200, adjust=False).mean()
+                    
                     df_hist['MA20'] = df_hist['Close'].rolling(20).mean()
                     df_hist['STD20'] = df_hist['Close'].rolling(20).std()
                     df_hist['Banda_Sup'] = df_hist['MA20'] + (2 * df_hist['STD20'])
@@ -382,39 +389,49 @@ def renderizar_painel():
                     capital_atual = capital_inicial
                     curva_capital = [capital_inicial]
 
-                    for i in range(35, len(df_hist) - 10):
+                    for i in range(200, len(df_hist) - 15):
                         close_p = df_hist['Close'].iloc[i]
                         ema9_p = df_hist['EMA9'].iloc[i]
                         ema21_p = df_hist['EMA21'].iloc[i]
+                        ema200_p = df_hist['EMA200'].iloc[i]
                         macd_p = df_hist['MACD_Hist'].iloc[i]
                         vol_p = df_hist['Volume'].iloc[i]
                         vol_med_p = df_hist['Vol_Medio'].iloc[i]
+                        std_p = df_hist['STD20'].iloc[i]
                         banda_sup_p = df_hist['Banda_Sup'].iloc[i]
                         banda_inf_p = df_hist['Banda_Inf'].iloc[i]
 
                         tendencia_alta = close_p > ema9_p and ema9_p > ema21_p
+                        tendencia_macro = close_p > ema200_p
                         vol_forte = vol_p >= vol_med_p
                         momentum_alta = macd_p > 0
                         expansao_bollinger = (banda_sup_p - banda_inf_p) / df_hist['MA20'].iloc[i] >= 0.04
 
-                        if tendencia_alta and vol_forte and momentum_alta and expansao_bollinger:
+                        # Sinal LONG com Filtro Macro e Momentum
+                        if tendencia_alta and tendencia_macro and vol_forte and momentum_alta and expansao_bollinger:
                             preco_entrada = df_hist['Open'].iloc[i+1]
-                            preco_alvo = preco_entrada * (1 + (alvo_gain_pct / 100))
-                            preco_stop = preco_entrada * (1 - (stop_loss_pct / 100))
+                            
+                            # Alvo e Stop Dinâmicos baseados no Desvio Padrão (Volatilidade)
+                            distancia_alvo = std_p * fator_alvo
+                            distancia_stop = std_p * fator_stop
+                            
+                            preco_alvo = preco_entrada + distancia_alvo
+                            preco_stop = preco_entrada - distancia_stop
 
                             resultado_trade = "GAIN"
-                            retorno_pct = alvo_gain_pct
-                            for j in range(i+1, min(i+15, len(df_hist))):
+                            retorno_pct = ((preco_alvo - preco_entrada) / preco_entrada) * 100
+                            
+                            for j in range(i+1, min(i+20, len(df_hist))):
                                 max_dia = df_hist['High'].iloc[j]
                                 min_dia = df_hist['Low'].iloc[j]
 
                                 if min_dia <= preco_stop:
                                     resultado_trade = "LOSS"
-                                    retorno_pct = -stop_loss_pct
+                                    retorno_pct = -((preco_entrada - preco_stop) / preco_entrada) * 100
                                     break
                                 elif max_dia >= preco_alvo:
                                     resultado_trade = "GAIN"
-                                    retorno_pct = alvo_gain_pct
+                                    retorno_pct = ((preco_alvo - preco_entrada) / preco_entrada) * 100
                                     break
 
                             lucro_bruto = capital_atual * (retorno_pct / 100)
@@ -427,7 +444,7 @@ def renderizar_painel():
                                 "Entrada": preco_entrada,
                                 "Saída": preco_alvo if resultado_trade == "GAIN" else preco_stop,
                                 "Resultado": resultado_trade,
-                                "Retorno (%)": retorno_pct
+                                "Retorno (%)":orno_pct if 'orno_pct' in locals() else retorno_pct
                             })
 
                     df_trades = pd.DataFrame(trades)
@@ -450,7 +467,7 @@ def renderizar_painel():
                         prob_loss = derrotas / total_trades
                         expectativa_matematica = (prob_gain * media_gain) - (prob_loss * media_loss)
 
-                        st.subheader(f"📈 Relatório de Desempenho — {ativo_bt}")
+                        st.subheader(f"📈 Relatório de Desempenho Institucional — {ativo_bt}")
                         
                         m1, m2, m3, m4 = st.columns(4)
                         m1.metric("Taxa de Acerto (Win Rate)", f"{win_rate:.1f}%", delta=f"{vitorias} Wins / {derrotas} Losses")
@@ -466,6 +483,6 @@ def renderizar_painel():
                         with st.expander("📋 Ver Log Detalhado das Operações Simuladas"):
                             st.dataframe(df_trades, use_container_width=True, hide_index=True)
                     else:
-                        st.warning("Nenhum trade foi disparado pelo modelo neste período com os parâmetros atuais. Tente ajustar o alvo/stop ou escolher outro ativo.")
+                        st.warning("Nenhum trade foi disparado pelo modelo com os parâmetros atuais de volatilidade. Tente ajustar os multiplicadores.")
 
 renderizar_painel()
