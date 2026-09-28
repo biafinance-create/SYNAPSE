@@ -28,7 +28,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Lendo parâmetros opcionais da URL para links inteligentes (ex: ?modulo=OPTIONS SCANNER)
+# Lendo parâmetros opcionais da URL para links inteligentes
 query_params = st.query_params
 modulo_url = query_params.get("modulo", "MARKET X-RAY")
 
@@ -165,7 +165,7 @@ def analisar_ativo(ticker):
             "Prob 1D": prob_1d_str,
             "Prob 1S": prob_1s_str,
             "Sinal Final": sinal,
-            "Preco_Atual": close_atual
+            "Preco_Atual": close_ativo_val := close_atual
         }
     except Exception as e:
         return None
@@ -278,81 +278,51 @@ def renderizar_painel():
 
         exibir_tabela_ativos(df_filtrado)
 
-    # ABA 3: OPTIONS SCANNER
+    # ABA 3: OPTIONS SCANNER (Com Link Direto e Passo a Passo Profissional)
     elif pagina_selecionada == "OPTIONS SCANNER":
-        st.title("🎯 Options Scanner - Autofiltragem de Calls e Puts")
-        st.markdown("Analise a cadeia de opções de qualquer ativo da B3 com filtros automáticos de Moneyness, Liquidez e Vencimento.")
+        st.title("🎯 Options Scanner - Central de Derivativos")
+        st.markdown("Acesse a grade completa de opções na B3 e utilize o passo a passo profissional para operações direcionais de alta performance.")
         st.divider()
 
         tickers_disponiveis = df_display['Ticker'].tolist()
-        ativo_escolhido = st.selectbox("Selecione o Ativo Base:", tickers_disponiveis)
+        ativo_escolhido = st.selectbox("Selecione o Ativo Base para Operação:", tickers_disponiveis)
 
         if ativo_escolhido:
             preco_ativo = df_display.loc[df_display['Ticker'] == ativo_escolhido, 'Preco_Atual'].values[0]
             
-            col_info1, col_info2 = st.columns([2, 1])
-            with col_info1:
-                st.markdown(f"💵 **Preço Atual de {ativo_escolhido}:** R$ {preco_ativo:.2f}")
-            with col_info2:
-                url_opcoes_net = f"https://www.opcoes.net.br/opcoes/bovespa/{ativo_escolhido.lower()}"
-                st.markdown(f"🔗 [Abrir grade no Opcoes.net.br]({url_opcoes_net})", unsafe_allow_html=True)
+            # Caixa de destaque com o link direto para o Opcoes.net.br
+            st.markdown(f"""
+                <div style="background-color: #1e293b; padding: 20px; border-radius: 10px; border: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+                    <div>
+                        <h4 style="margin: 0; color: #38bdf8;">Ativo Selecionado: {ativo_escolhido}</h4>
+                        <p style="margin: 5px 0 0 0; color: #94a3b8; font-size: 16px;">Preço Atual de Referência: <b>R$ {preco_ativo:.2f}</b></p>
+                    </div>
+                    <div>
+                        <a href="https://www.opcoes.net.br/opcoes/bovespa/{ativo_escolhido.lower()}" target="_blank" style="background-color: #0284c7; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 15px;">🚀 Abrir Grade Completa no Opcoes.net.br</a>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
 
-            try:
-                ticker_obj = yf.Ticker(f"{ativo_escolhido}.SA")
-                vencimentos = ticker_obj.options
-
-                if not vencimentos or len(vencimentos) == 0:
-                    st.warning(f"⚠️ O Yahoo Finance está sem feed de opções para {ativo_escolhido} no momento. Utilize o link ao lado para consultar a grade completa diretamente no Opcoes.net.br.")
-                else:
-                    col_f1, col_f2, col_f3 = st.columns(3)
-                    
-                    with col_f1:
-                        tipo_opcao = st.selectbox("Tipo de Opção:", ["CALL", "PUT"])
-                    with col_f2:
-                        vencimento_escolhido = st.selectbox("Data de Vencimento:", vencimentos)
-                    with col_f3:
-                        moneyness_filtro = st.selectbox("Classificação (Moneyness):", ["TODOS", "ATM (No Dinheiro)", "ITM (Dentro do Dinheiro)", "OTM (Fora do Dinheiro)"])
-
-                    cadeia = ticker_obj.option_chain(vencimento_escolhido)
-                    tabela_opcoes = cadeia.calls if tipo_opcao == "CALL" else cadeia.puts
-
-                    if not tabela_opcoes.empty:
-                        tabela_opcoes['Distancia_%'] = ((tabela_opcoes['strike'] - preco_ativo) / preco_ativo) * 100
-
-                        def classificar_moneyness(row, tipo, preco):
-                            strike = row['strike']
-                            if tipo == "CALL":
-                                if abs(strike - preco) / preco <= 0.03: return "ATM"
-                                elif strike < preco: return "ITM"
-                                else: return "OTM"
-                            else:
-                                if abs(strike - preco) / preco <= 0.03: return "ATM"
-                                elif strike > preco: return "ITM"
-                                else: return "OTM"
-
-                        tabela_opcoes['Status'] = tabela_opcoes.apply(lambda r: classificar_moneyness(r, tipo_opcao, preco_ativo), axis=1)
-
-                        if moneyness_filtro != "TODOS":
-                            sigla_filtro = moneyness_filtro.split(" ")[0]
-                            tabela_opcoes = tabela_opcoes[tabela_opcoes['Status'] == sigla_filtro]
-
-                        tabela_limpa = tabela_opcoes[['contractSymbol', 'strike', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest', 'impliedVolatility', 'Status']].copy()
-                        tabela_limpa.columns = ['Contrato', 'Strike (R$)', 'Último (R$)', 'Bid', 'Ask', 'Volume', 'Open Interest', 'Vol. Implicita', 'Moneyness']
-
-                        tabela_limpa = tabela_limpa.sort_values(by='Volume', ascending=False).fillna(0)
-
-                        st.subheader(f"📋 Cadeia de {tipo_opcao}s Filtrada — Vencimento: {vencimento_escolhido}")
-                        st.markdown(f"Mostrando opções para **{ativo_escolhido}** com base nos critérios selecionados:")
-
-                        st.dataframe(
-                            tabela_limpa,
-                            use_container_width=True,
-                            hide_index=True
-                        )
-                    else:
-                        st.info("Nenhum contrato encontrado para este vencimento.")
-
-            except Exception as e:
-                st.error(f"Erro ao carregar a cadeia de opções para {ativo_escolhido}: {e}")
+            # PASSO A PASSO PROFISSIONAL PARA OPERAÇÕES DIRECIONAIS
+            with st.expander("📖 Guia Passo a Passo: Como escolher a melhor opção para Swing/Position Trade", expanded=True):
+                st.markdown("""
+                Siga esta metodologia de sniper para filtrar e escolher a opção ideal ao abrir a grade externa:
+                
+                1. **Defina a Direção (Viés):**
+                   * Se a sua análise no **Market X-Ray** deu **LONG 🟢**, foque exclusivamente em **CALLs** (opções de compra).
+                   * Se deu **SHORT 🔴**, foque exclusivamente em **PUTs** (opções de venda).
+                
+                2. **Escolha o Vencimento Ideal (Prazo):**
+                   * Para operações de **Swing Trade** (durando dias ou poucas semanas), busque vencimentos entre **30 e 45 dias** para evitar o desgaste rápido do *theta* (decay temporal).
+                   * Para **Position Trade** (tendências longas), prefira vencimentos superiores a **60 dias**.
+                
+                3. **Selecione o Moneyness (Strike vs Preço Atual):**
+                   * **ATM (At-the-Money / No Dinheiro):** Strikes muito próximos ao preço atual. São excelentes para operações direcionais rápidas, pois possuem boa alavancagem e **Delta próximo a 0.50**.
+                   * **OTM Leve (Fora do Dinheiro de 2% a 5%):** Prêmios mais baratos (pó controlado). Ideais se você busca alta assimetria (arriscar pouco para buscar um movimento explosivo de rompimento).
+                
+                4. **Filtre por Liquidez (O Critério de Ouro):**
+                   * Nunca compre ou venda opções sem negócio. No **Opcoes.net.br**, filtre ou ordene pelo **Volume Financeiro** e **Open Interest (Em Aberto)**.
+                   * Garanta que o *bid/ask* (oferta de compra e venda) não tenha um spread gigante para facilitar a sua saída da operação.
+                """)
 
 renderizar_painel()
