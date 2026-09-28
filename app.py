@@ -28,9 +28,16 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# BARRA LATERAL COM NAVEGAÇÃO EXPANDIDA
+# Lendo parâmetros opcionais da URL para links inteligentes (ex: ?modulo=OPTIONS SCANNER)
+query_params = st.query_params
+modulo_url = query_params.get("modulo", "MARKET X-RAY")
+
+modulos_disponiveis = ["MARKET X-RAY", "MARKET FEELING", "OPTIONS SCANNER"]
+indice_inicial = modulos_disponiveis.index(modulo_url) if modulo_url in modulos_disponiveis else 0
+
+# BARRA LATERAL COM NAVEGAÇÃO
 st.sidebar.title("🧭 Navegação Synapse")
-pagina_selecionada = st.sidebar.radio("Selecione o Módulo:", ["MARKET X-RAY", "MARKET FEELING", "OPTIONS SCANNER"])
+pagina_selecionada = st.sidebar.radio("Selecione o Módulo:", modulos_disponiveis, index=indice_inicial)
 
 # Lista abrangente de ativos da B3
 lista_b3 = [
@@ -271,7 +278,7 @@ def renderizar_painel():
 
         exibir_tabela_ativos(df_filtrado)
 
-    # ABA 3: OPTIONS SCANNER (Com Atalho Inteligente para o Opcoes.net.br)
+    # ABA 3: OPTIONS SCANNER
     elif pagina_selecionada == "OPTIONS SCANNER":
         st.title("🎯 Options Scanner - Autofiltragem de Calls e Puts")
         st.markdown("Analise a cadeia de opções de qualquer ativo da B3 com filtros automáticos de Moneyness, Liquidez e Vencimento.")
@@ -283,7 +290,6 @@ def renderizar_painel():
         if ativo_escolhido:
             preco_ativo = df_display.loc[df_display['Ticker'] == ativo_escolhido, 'Preco_Atual'].values[0]
             
-            # Exibe o preço e um link direto para a grade do opcoes.net.br como redundância profissional
             col_info1, col_info2 = st.columns([2, 1])
             with col_info1:
                 st.markdown(f"💵 **Preço Atual de {ativo_escolhido}:** R$ {preco_ativo:.2f}")
