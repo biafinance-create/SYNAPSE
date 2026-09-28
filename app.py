@@ -62,7 +62,7 @@ def analisar_ativo(ticker):
             
         df = df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
             
-        if len(df) < 30:
+        if len(df) < 35:
             return None
 
         # 1. Médias Móveis Exponenciais (Tendência)
@@ -87,7 +87,18 @@ def analisar_ativo(ticker):
             forca_str = f"💤 Fraca (Comprimido)"
             forca_val = 0
 
-        # 3. Score de Volume (1 a 5)
+        # 3. Indicador de Momentum (MACD) para combater o lag
+        exp12 = df['Close'].ewm(span=12, adjust=False).mean()
+        exp26 = df['Close'].ewm(span=26, adjust=False).mean()
+        df['MACD'] = exp12 - exp26
+        df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
+        df['MACD_Hist'] = df['MACD'] - df['Signal_Line']
+        
+        # Estado atual do Momentum (positivo = acelerando alta, negativo = acelerando baixa)
+        macd_hist_atual = df['MACD_Hist'].iloc[-1]
+        momentum_val = 1 if macd_hist_atual > 0 else -1
+
+        # 4. Score de Volume (1 a 5)
         recent_volumes = df['Volume'].tail(30).dropna()
         if len(recent_volumes) > 5:
             percentis = np.percentile(recent_volumes, [20, 40, 60, 80])
@@ -104,7 +115,7 @@ def analisar_ativo(ticker):
         variacao_preco = df['Close'].iloc[-1] - df['Close'].iloc[-2]
         vol_positivo = "🟢" if variacao_preco >= 0 else "🔴"
 
-        # 4. Tendência atual
+        # 5. Tendência atual
         close_atual = df['Close'].iloc[-1]
         ema9_atual = df['EMA9'].iloc[-1]
         ema21_atual = df['EMA21'].iloc[-1]
@@ -119,18 +130,18 @@ def analisar_ativo(ticker):
             tendencia = "Lateral 🦀"
             tendencia_val = 0
 
-        # 5. SINAL FINAL INTELIGENTE
-        if tendencia_val == 1 and score_vol >= 3 and forca_val > 0:
+        # 6. SINAL FINAL INTELIGENTE (Exige Tendência + Volume + Força + Momentum a favor)
+        if tendencia_val == 1 and score_vol >= 3 and forca_val > 0 and momentum_val == 1:
             sinal = "LONG 🟢"
             status_orquestra = 1 
-        elif tendencia_val == -1 and score_vol >= 3 and forca_val > 0:
+        elif tendencia_val == -1 and score_vol >= 3 and forca_val > 0 and momentum_val == -1:
             sinal = "SHORT 🔴"
             status_orquestra = -1
         else:
             sinal = "NEUTRO ⚪"
             status_orquestra = 0
 
-        # 6. PROBABILIDADES SINCRONIZADAS
+        # 7. PROBABILIDADES SINCRONIZADAS
         if status_orquestra == 1 or status_orquestra == -1:
             prob_1h = np.random.randint(65, 76)
             prob_1d = np.random.randint(72, 83)
@@ -219,7 +230,7 @@ def exibir_tabela_ativos(dataframe):
 def renderizar_painel():
     horario_brasilia = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime('%H:%M:%S')
     
-    with st.spinner("Analisando ativos da B3 em lote..."):
+    with st.spinner("Analisando ativos da B3 com motor de Momentum (MACD)..."):
         dados_tabela = [analisar_ativo(t) for t in lista_b3]
         dados_tabela = [d for d in dados_tabela if d is not None]
 
@@ -232,7 +243,7 @@ def renderizar_painel():
     # ABA 1: MARKET X-RAY
     if pagina_selecionada == "MARKET X-RAY":
         st.title("🔬 Market X-Ray - Análise Quantitativa Detalhada")
-        st.markdown(f"Monitoramento individual dos ativos da B3. *Última atualização: {horario_brasilia} (Brasília)*")
+        st.markdown(f"Monitoramento individual com filtro de aceleração e momentum. *Última atualização: {horario_brasilia} (Brasília)*")
         st.divider()
         exibir_tabela_ativos(df_display)
 
@@ -278,7 +289,7 @@ def renderizar_painel():
 
         exibir_tabela_ativos(df_filtrado)
 
-    # ABA 3: OPTIONS SCANNER (Com Guia de Bid/Ask e Passo a Passo)
+    # ABA 3: OPTIONS SCANNER
     elif pagina_selecionada == "OPTIONS SCANNER":
         st.title("🎯 Options Scanner - Central de Derivativos")
         st.markdown("Acesse a grade completa de opções na B3 e utilize o passo a passo profissional para operações direcionais de alta performance.")
