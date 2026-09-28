@@ -194,7 +194,6 @@ def executar_motor_preditivo(ticker_full):
         if len(df) < 200:
             return None
 
-        # Indicadores do Estado Atual
         df['EMA9'] = df['Close'].ewm(span=9, adjust=False).mean()
         df['EMA21'] = df['Close'].ewm(span=21, adjust=False).mean()
         df['EMA200'] = df['Close'].ewm(span=200, adjust=False).mean()
@@ -208,13 +207,10 @@ def executar_motor_preditivo(ticker_full):
         df['MACD_Hist'] = (exp12 - exp26) - (exp12 - exp26).ewm(span=9, adjust=False).mean()
         df['Vol_Medio'] = df['Volume'].rolling(30).mean()
 
-        # Isolando o DNA do momento mais recente (último dia fechado)
-        i_atual = len(df) - 5 # Janela recente
         padroes_similares_altas = 0
         total_ocorrencias = 0
         retornos_futuros = []
 
-        # Vasculha o histórico procurando ocorrências de confluência idêntica
         for i in range(200, len(df) - 10):
             c_p = df['Close'].iloc[i]
             e9_p = df['EMA9'].iloc[i]
@@ -234,7 +230,6 @@ def executar_motor_preditivo(ticker_full):
 
             if tendencia_ok and macro_ok and vol_ok and momentum_ok and bollinger_ok:
                 total_ocorrencias += 1
-                # Mede o comportamento nos 5 dias seguintes
                 preco_base = df['Close'].iloc[i]
                 preco_futuro = df['Close'].iloc[min(i + 5, len(df) - 1)]
                 variacao = ((preco_futuro - preco_base) / preco_base) * 100
@@ -245,25 +240,31 @@ def executar_motor_preditivo(ticker_full):
         if total_ocorrencias == 0:
             return {
                 "ocorrencias": 0,
-                "probabilidade_alta": 50.0,
+                "probabilidade": 50.0,
                 "retorno_medio": 0.0,
+                "tipo_bias": "NEUTRO",
                 "status_preditivo": "Neutro / Amostra Insuficiente"
             }
 
         prob_alta = (padroes_similares_altas / total_ocorrencias) * 100
         ret_medio = np.mean(retornos_futuros)
 
-        if prob_alta >= 65.0:
+        # Lógica dinâmica para adaptar o rótulo de Alta, Baixa ou Neutro
+        if prob_alta >= 60.0:
+            tipo_bias = "ALTA"
             status = "🟢 Alta Confluência Preditiva (Viés Altista)"
-        elif prob_alta <= 35.0:
-            status = "🔴 Alerta Preditivo (Viés de Baixa)"
+        elif prob_alta <= 40.0:
+            tipo_bias = "BAIXA"
+            status = "🔴 Alerta Preditivo (Viés de Baixa / Pressão Vendedora)"
         else:
-            status = "⚪ Zona Neutra / Sem Direção Clara"
+            tipo_bias = "NEUTRO"
+            status = "⚪ Zona Neutra / Sem Direção Direcional Clara"
 
         return {
             "ocorrencias": total_ocorrencias,
-            "probabilidade_alta": prob_alta,
+            "probabilidade": prob_alta,
             "retorno_medio": ret_medio,
+            "tipo_bias": tipo_bias,
             "status_preditivo": status
         }
     except Exception:
@@ -411,7 +412,7 @@ def renderizar_painel():
                 
                 2. **Escolha o Vencimento Ideal (Prazo):**
                    * Para **Swing Trade** (dias ou poucas semanas), busque vencimentos entre **30 e 45 dias** para evitar o desgaste acelerado do tempo (*theta*).
-                   * For **Position Trade** (tendências longas), prefira vencimentos superiores a **60 dias**.
+                   * Para **Position Trade** (tendências longas), prefira vencimentos superiores a **60 dias**.
                 
                 3. **Selecione o Moneyness (Strike vs Preço Atual):**
                    * **ATM (At-the-Money / No Dinheiro):** Strikes muito próximos ao preço atual. Excelentes para operações direcionais ágeis com **Delta próximo a 0.50**.
@@ -426,7 +427,7 @@ def renderizar_painel():
                      * A diferença de R$ 0,02 é o **Spread**. *Regra de ouro:* Evite opções com spreads gigantescos (ex: Bid a R$ 0,50 e Ask a R$ 0,90), pois você perde dinheiro só de entrar e sair! Procure contratos onde Bid e Ask estejam bem coladinhos e com bom **Volume** e **Open Interest**.
                 """)
 
-    # ABA 4: PREDICTIVE AI ENGINE (Motor Preditivo Estatístico)
+    # ABA 4: PREDICTIVE AI ENGINE (Com Dinâmica Adaptativa para Alta, Baixa ou Neutro)
     elif pagina_selecionada == "PREDICTIVE AI ENGINE":
         st.title("🧠 Predictive AI Engine - Inteligência Estatística Prospectiva")
         st.markdown("O motor preditivo varre o histórico do ativo em tempo real, identifica **padrões comportamentais idênticos ao momento atual** e calcula a probabilidade prospectiva para os próximos 5 pregões.")
@@ -448,13 +449,27 @@ def renderizar_painel():
                 else:
                     st.subheader(f"📊 Relatório Preditivo Prospectivo — {ativo_pred}")
                     
+                    # Rótulo e cor dinâmicos com base no viés estatístico
+                    bias = resultado_ia['tipo_bias']
+                    prob_val = resultado_ia['probabilidade']
+                    
+                    if bias == "ALTA":
+                        label_prob = "Probabilidade de Alta (Próx. 5 Dias)"
+                        delta_color = "🟢 Viés Altista"
+                    elif bias == "BAIXA":
+                        label_prob = "Probabilidade de Baixa (Próx. 5 Dias)"
+                        delta_color = "🔴 Viés de Baixa"
+                    else:
+                        label_prob = "Probabilidade Direcional (Próx. 5 Dias)"
+                        delta_color = "⚪ Zona Neutra"
+
                     p1, p2, p3 = st.columns(3)
-                    p1.metric("Probabilidade de Alta (Próx. 5 Dias)", f"{resultado_ia['probabilidade_alta']:.1f}%", delta="Baseado em analogia histórica")
+                    p1.metric(label_prob, f"{prob_val:.1f}%", delta=delta_color)
                     p2.metric("Retorno Médio Esperado", f"{resultado_ia['retorno_medio']:+.2f}%", delta="Janela de 5 pregões")
                     p3.metric("Ocorrências Similares Analisadas", f"{resultado_ia['ocorrencias']} padrões idênticos")
 
                     st.divider()
                     st.markdown(f"### **Veredito Preditivo da IA:** {resultado_ia['status_preditivo']}")
-                    st.info("💡 **Como interpretar:** Este número representa a frequência estatística com que o mercado subiu nos 5 dias subsequentes sempre que este exato cruzamento de tendência, volume, MACD e volatilidade ocorreu no passado do ativo.")
+                    st.info("💡 **Como interpretar:** O rótulo e o viés do painel agora se adaptam autonomamente. Se o histórico do padrão aponta para correção, o indicador exibe claramente a probabilidade e o viés de baixa, evitando qualquer viés engessado de alta.")
 
 renderizar_painel()
