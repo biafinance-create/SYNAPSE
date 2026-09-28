@@ -165,7 +165,7 @@ def analisar_ativo(ticker):
             "Prob 1D": prob_1d_str,
             "Prob 1S": prob_1s_str,
             "Sinal Final": sinal,
-            "Preco_Atual": close_ativo_val := close_atual
+            "Preco_Atual": close_atual
         }
     except Exception as e:
         return None
